@@ -1,0 +1,2 @@
+https://www.lfd.uci.edu/~gohlke/pythonlibs/#ta-lib
+https://www.youtube.com/watch?v=-mGeD9FSUZI
