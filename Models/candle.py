@@ -1,3 +1,8 @@
+from datetime import timedelta
+import plotly.graph_objects as go
+from tools.horizontal_trend_line import HorizontalTrendLine
+
+
 class Candle:
     def __init__(self, time, row):
         self.time = time
@@ -15,6 +20,30 @@ class Candle:
 
     def body_size(self) -> float:
         return abs(self.open_price - self.close_price)
+
+    def is_imbalance(self) -> bool:
+        if self.__row['Imbalance'] == 0:
+            return False
+
+        body_size = self.body_size()
+        imbalance_body_ratio = self.__row['Imbalance'] / body_size
+
+        return imbalance_body_ratio >= 0.5 and not self.is_indecision()
+
+    def plot_imbalance(self, figure: go.Figure):
+        if not self.is_imbalance():
+            return
+
+        from_time = self.time
+        to_time = self.time + timedelta(hours=2)
+        imbalance_start = self.__row['Imbalance_Start']
+        imbalance_end = self.__row['Imbalance_End']
+
+        bottom_line = HorizontalTrendLine('', from_time, to_time, imbalance_start)
+        top_line = HorizontalTrendLine('', from_time, to_time, imbalance_end)
+
+        bottom_line.plot(figure, 'black')
+        top_line.plot(figure, 'black')
 
     # Indecision
     def is_indecision(self):

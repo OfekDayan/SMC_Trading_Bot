@@ -56,7 +56,7 @@ class PivotPoints:
             else:
                 self.uptrend()
 
-    def plot(self, figure: go.Figure):
+    def add_to_chart(self, figure: go.Figure):
         # plot CHoCH & BOS
         for choch_bos in self.__choches_and_boses:
             color = 'red' if choch_bos.name == 'CHoCH' else 'blue'
@@ -65,9 +65,6 @@ class PivotPoints:
         # plot market structure
         for point in self.market_structure_points:
             point.plot(figure, 'black')
-
-        figure.update_layout(xaxis_rangeslider_visible=False)
-        figure.show()
 
     def uptrend(self):
         for index, row in self.temp_df[self.current_candle_index:].iterrows():
