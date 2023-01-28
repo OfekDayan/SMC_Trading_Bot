@@ -17,7 +17,7 @@ class PivotPoints:
         self.high = None
         self.dynamic_low = None
         self.dynamic_high = None
-        self.__choches_and_boses = []
+        self.choches_and_boses = []
         self.market_structure_points = []
 
     def __find_trend(self):
@@ -58,7 +58,7 @@ class PivotPoints:
 
     def add_to_chart(self, figure: go.Figure):
         # plot CHoCH & BOS
-        for choch_bos in self.__choches_and_boses:
+        for choch_bos in self.choches_and_boses:
             color = 'red' if choch_bos.name == 'CHoCH' else 'blue'
             choch_bos.plot(figure, color)
 
@@ -74,7 +74,7 @@ class PivotPoints:
             if self.low is not None and self.high is not None:
                 # LL found
                 if candle.close_price < self.low.price:
-                    self.__choches_and_boses.append(HorizontalTrendLine('CHoCH', self.low.datetime, candle.time, self.low.price))
+                    self.choches_and_boses.append(HorizontalTrendLine('CHoCH', self.low.datetime, candle.time, self.low.price))
                     self.low = None
                     self.dynamic_low = Point(candle.time, candle.low_price)
                     self.__trend = 'downtrend'
@@ -82,7 +82,7 @@ class PivotPoints:
 
                 # HL found
                 if candle.close_price > self.high.price:
-                    self.__choches_and_boses.append(HorizontalTrendLine('BOS', self.high.datetime, candle.time, self.high.price))
+                    self.choches_and_boses.append(HorizontalTrendLine('BOS', self.high.datetime, candle.time, self.high.price))
 
                     self.low = Point(self.dynamic_low.datetime, self.dynamic_low.price)
                     self.market_structure_points.append(Point(self.low.datetime, self.low.price, 'HL'))
@@ -120,7 +120,7 @@ class PivotPoints:
             if self.low is not None and self.high is not None:
                 # HH found
                 if candle.close_price > self.high.price:
-                    self.__choches_and_boses.append(HorizontalTrendLine('CHoCH', self.high.datetime, candle.time, self.high.price))
+                    self.choches_and_boses.append(HorizontalTrendLine('CHoCH', self.high.datetime, candle.time, self.high.price))
                     self.high = None
                     self.dynamic_high = Point(candle.time, candle.high_price)
                     self.__trend = 'uptrend'
@@ -128,7 +128,7 @@ class PivotPoints:
 
                 # LH found
                 if candle.close_price < self.low.price:
-                    self.__choches_and_boses.append(HorizontalTrendLine('BOS', self.low.datetime, candle.time, self.low.price))
+                    self.choches_and_boses.append(HorizontalTrendLine('BOS', self.low.datetime, candle.time, self.low.price))
 
                     self.high = Point(self.dynamic_high.datetime, self.dynamic_high.price)
                     self.market_structure_points.append(Point(self.high.datetime, self.high.price, 'LH'))
