@@ -23,9 +23,6 @@ pivot_points.find()
 pivot_points.add_to_chart(fig)
 
 
-fig.update_layout(xaxis_rangeslider_visible=False)
-fig.show()
-
 find(pivot_points.choches_and_boses, pivot_points.market_structure_points, fig, df)
 
 fig.update_layout(xaxis_rangeslider_visible=False)

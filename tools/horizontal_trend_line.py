@@ -1,6 +1,5 @@
 from datetime import datetime
 import plotly.graph_objects as go
-from tools.point import Point
 
 
 class HorizontalTrendLine:
@@ -18,9 +17,5 @@ class HorizontalTrendLine:
         x2 = self.to_datetime
         y = self.price
 
-        figure.add_trace(go.Scatter(x=[x1, x2], y=[y, y], mode='lines', name=self.name, line=dict(color=color)))
-
-        if self.name:
-            x = x1 + (x2 - x1) / 2.0
-            label_point = Point(x, y, self.name)
-            label_point.plot(figure, color)
+        figure.add_trace(go.Scatter(x=[x1, x1 + (x2 - x1) / 2.0, x2], y=[y, y, y], mode='lines+text', name=self.name,
+                                    line=dict(color=color), text=['', self.name, ''], textposition="top center"))

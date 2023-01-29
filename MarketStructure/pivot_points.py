@@ -57,14 +57,17 @@ class PivotPoints:
                 self.uptrend()
 
     def add_to_chart(self, figure: go.Figure):
-        # plot CHoCH & BOS
+        self.plot_smc_levels(figure)
+        self.plot_pivot_points(figure)
+
+    def plot_pivot_points(self, figure: go.Figure):
+        for point in self.market_structure_points:
+            point.plot(figure, 'black')
+
+    def plot_smc_levels(self, figure: go.Figure):
         for choch_bos in self.choches_and_boses:
             color = 'red' if choch_bos.name == 'CHoCH' else 'blue'
             choch_bos.plot(figure, color)
-
-        # plot market structure
-        for point in self.market_structure_points:
-            point.plot(figure, 'black')
 
     def uptrend(self):
         for index, row in self.temp_df[self.current_candle_index:].iterrows():

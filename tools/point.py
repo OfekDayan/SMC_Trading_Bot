@@ -3,8 +3,8 @@ import plotly.graph_objects as go
 
 
 class Point:
-    def __init__(self, datetime: datetime, price, name: str = ''):
-        self.datetime = datetime
+    def __init__(self, date_time: datetime, price, name: str = ''):
+        self.datetime = date_time
         self.price = price
         self.name = name
 
