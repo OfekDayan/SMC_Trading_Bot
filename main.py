@@ -1,12 +1,12 @@
 import yfinance as yf
 import plotly.graph_objects as go
-from MarketStructure.entry_zone_finder import find
+from MarketStructure.entry_zone_finder import EntryZoneFinder
 from MarketStructure.pivot_points import PivotPoints
 from smc.chart_methods import ChartMethods
 
 ticker = 'MATIC-USD'
 yfObj = yf.Ticker(ticker)
-df = yfObj.history(period='5d', interval='15m')
+df = yfObj.history(period='20d', interval='1h')
 df['type'] = df.apply(lambda x: 'Bullish' if x['Close'] > x['Open'] else 'Bearish', axis=1)
 
 # create candlesticks chart
@@ -23,7 +23,8 @@ pivot_points.find()
 pivot_points.add_to_chart(fig)
 
 
-find(pivot_points.choches_and_boses, pivot_points.market_structure_points, fig, df)
+entry_zone_finder = EntryZoneFinder(df, fig)
+entry_zone_finder.find(pivot_points.choches_and_boses, pivot_points.market_structure_points)
 
 fig.update_layout(xaxis_rangeslider_visible=False)
 fig.show()
