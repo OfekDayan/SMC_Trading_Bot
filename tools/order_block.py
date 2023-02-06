@@ -18,12 +18,13 @@ class OrderBlock:
     def plot(self, df: pandas.DataFrame, figure: go.Figure):
         timeframe = self.__get_timeframe(df)
 
-        if self.is_touched:
-            color = "Blue"
-            name = f'{timeframe} Mitigation'
-        else:
-            color = "Green" if self.is_bullish else "Red"
-            name = f'{timeframe} ODB'
+        # TODO: need to check mitigations
+        # if self.is_touched:
+        #     color = "Blue"
+        #     name = f'{timeframe} Mitigation'
+        # else:
+        color = "Green" if self.is_bullish else "Red"
+        name = f'{timeframe} ODB'
 
         x0 = self.bottom_left.datetime
         y0 = self.bottom_left.price
