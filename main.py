@@ -6,7 +6,7 @@ from MarketStructure.pivot_points import PivotPoints
 from smc.chart_methods import ChartMethods
 
 symbol = 'BTCUSDT'
-timeframe = '15m'
+timeframe = '1H'
 
 exchange = ccxt.binance()
 exchange.options = {'defaultType': 'future', 'adjustForTimeDifference': True}
