@@ -3,15 +3,24 @@ import pandas as pd
 import plotly.graph_objects as go
 from MarketStructure.entry_zone_finder import EntryZoneFinder
 from MarketStructure.pivot_points import PivotPoints
+from TelegramHandler.telegram_handler import TelegramHandler
 from smc.chart_methods import ChartMethods
 
+telegramHandler = TelegramHandler()
+telegramHandler.start()
+
+telegramHandler.send_message_to_user("hi", "C:\\Users\\ofekbiny\\Downloads\\idea.png")
+poll_id = telegramHandler.send_poll_to_user()
+
+# selection = telegramHandler.get_poll_response(poll_id)
+
 symbol = 'BTCUSDT'
-timeframe = '1H'
+timeframe = '1h'
 
 exchange = ccxt.binance()
 exchange.options = {'defaultType': 'future', 'adjustForTimeDifference': True}
 
-ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=500)
+ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=700)
 df = pd.DataFrame(ohlcv, columns=['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
 df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='ms')
 df.set_index('Timestamp', inplace=True)
@@ -29,8 +38,11 @@ pivot_points = PivotPoints(df)
 pivot_points.find()
 pivot_points.add_to_chart(fig)
 
+choches_and_boses = pivot_points.choches_and_boses
+pivot_points = pivot_points.market_structure_points
+
 entry_zone_finder = EntryZoneFinder(df, fig)
-entry_zone_finder.find(pivot_points.choches_and_boses, pivot_points.market_structure_points)
+entry_zone_finder.find(choches_and_boses, pivot_points)
 
 fig.update_layout(xaxis_rangeslider_visible=False)
 fig.show()
