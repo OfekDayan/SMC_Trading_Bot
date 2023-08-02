@@ -24,8 +24,15 @@ class TelegramHandler:
         url = f'https://api.telegram.org/bot{BOT_ID}/sendPoll'
         data = {
             'chat_id': '1451941685',
-            'question': 'Hi?',
-            'options': ['A', 'B']
+            'question': 'I have a potential trade for you, what should I do?',
+            'options':
+                [
+                    'Take the trade!',
+                    'Ignore this signal',
+                    'Notify me when price hits the order block',
+                    'Notify me when the liquidity will be taken',
+                    'Notify me if a reversal candle is found on Order Block'
+                 ]
         }
         response = requests.post(url, json=data)
 
@@ -37,12 +44,12 @@ class TelegramHandler:
             print(f"Failed to send poll. Status code: {response.status_code}")
             return None
 
-    def get_poll_response(self, poll_id):
-        poll = await telegramClient.get_entity(poll_id)
-        votes = await telegramClient.get_poll_votes(poll)
-        print("Poll options and votes:")
-        for option, count in votes.items():
-            print(f"{option}: {count}")
+    # def get_poll_response(self, poll_id):
+    #     poll = await telegramClient.get_entity(poll_id)
+    #     votes = await telegramClient.get_poll_votes(poll)
+    #     print("Poll options and votes:")
+    #     for option, count in votes.items():
+    #         print(f"{option}: {count}")
 
     def send_message_to_user(self, message: str, image_path: str = None):
         # If image_path is provided, send photo with caption

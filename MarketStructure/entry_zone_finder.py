@@ -38,9 +38,24 @@ class EntryZoneFinder:
 
             if next_pivot_point_index < len(market_structure_points):  # next pivot point exists?
                 after_pivot_point = market_structure_points[next_pivot_point_index]
-                order_block_pullback_df = self.df.loc[after_pivot_point.datetime:]
+
+                # Check if there is at least 1 imbalance caused by the order block
+                active_zone_df = self.df.loc[pivot_point_starts_the_swing.datetime:after_pivot_point.datetime]
+
+                is_imbalance_found = False
+
+                for index, row in active_zone_df.iterrows():
+                    candle = Candle(index, row)
+
+                    if candle.is_imbalance():
+                        is_imbalance_found = True
+
+                if not is_imbalance_found:
+                    continue
 
                 # check if order block is touched
+                order_block_pullback_df = self.df.loc[after_pivot_point.datetime:]
+
                 for candle_time, row in order_block_pullback_df.iterrows():
                     candle = Candle(candle_time, row)
 

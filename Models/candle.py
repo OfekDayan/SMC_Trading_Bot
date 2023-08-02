@@ -28,7 +28,8 @@ class Candle:
         body_size = self.body_size()
         imbalance_body_ratio = self.__row['Imbalance'] / body_size
 
-        return imbalance_body_ratio >= 0.5 and not self.is_indecision()
+        # return imbalance_body_ratio >= 0.3
+        return True
 
     def plot_imbalance(self, figure: go.Figure):
         if not self.is_imbalance():
