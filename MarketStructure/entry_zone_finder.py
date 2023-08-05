@@ -14,7 +14,10 @@ class EntryZoneFinder:
         self.figure = figure
         self.df = df
 
-    def find(self, choches_and_boses: List[HorizontalTrendLine], market_structure_points: List[Point]):
+    def find(self, choches_and_boses: List[HorizontalTrendLine], market_structure_points: List[Point]) -> list[
+        (OrderBlock, pandas.DataFrame)]:
+        order_blocks_and_pullback_df = []
+
         for smc_level in choches_and_boses:
             # find the pivot point caused the BOS / CHoCH
             before_pivot_point = [date for date in market_structure_points if date.datetime < smc_level.to_datetime][-1]
@@ -59,12 +62,21 @@ class EntryZoneFinder:
                 for candle_time, row in order_block_pullback_df.iterrows():
                     candle = Candle(candle_time, row)
 
-                    if order_block.is_touched_rectangle(candle.low_price) or order_block.is_touched_rectangle(candle.high_price):
+                    # Is order block touched?
+                    if order_block.is_touched_rectangle(candle.low_price) or order_block.is_touched_rectangle(
+                            candle.high_price):
                         order_block.set_as_touched(candle_time)
+                        order_block_pullback_df = order_block_pullback_df.loc[:candle.time]
                         break
 
-                # plot order block
-                order_block.plot(self.df, self.figure)
+                    # Is order block failed (broke the after pivot point)?
+                    if (order_block.is_bullish and candle.close_price > after_pivot_point.price) or \
+                            (not order_block.is_bullish and candle.close_price < after_pivot_point.price):
+                        order_block.set_as_failed(candle_time)
+
+                order_blocks_and_pullback_df.append((order_block, order_block_pullback_df))
+
+        return order_blocks_and_pullback_df
 
     def __get_order_block(self, institutional_candle: Candle, is_bullish: bool) -> OrderBlock:
         odb_bottom_left = Point(institutional_candle.time, institutional_candle.low_price)
@@ -117,7 +129,3 @@ class EntryZoneFinder:
                 pivot_point_starts_the_swing = None
 
         return pivot_point_starts_the_swing
-
-
-
-

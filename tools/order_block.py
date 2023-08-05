@@ -10,21 +10,32 @@ class OrderBlock:
         self.top_right = top_right
         self.is_bullish = is_bullish
         self.is_touched = False
+        self.is_failed = False
+
+    def get_top_left(self):
+        return Point(self.bottom_left.datetime, self.top_right.price)
 
     def set_as_touched(self, touching_datetime: datetime):
         self.is_touched = True
         self.top_right.datetime = touching_datetime
 
+    def set_as_failed(self, touching_datetime: datetime):
+        self.is_failed = True
+        self.top_right.datetime = touching_datetime
+
     def plot(self, df: pandas.DataFrame, figure: go.Figure):
         timeframe = self.__get_timeframe(df)
 
-        # TODO: need to check mitigations
-        # if self.is_touched:
-        #     color = "Blue"
-        #     name = f'{timeframe} Mitigation'
-        # else:
-        color = "Green" if self.is_bullish else "Red"
-        name = f'{timeframe} ODB'
+        if self.is_touched:
+            color = "Blue"
+            name = f'{timeframe} Mitigation'
+
+        elif self.is_failed:
+            color = "Black"
+            name = f'{timeframe} Failed'
+        else:
+            color = "Green" if self.is_bullish else "Red"
+            name = f'{timeframe} ODB'
 
         x0 = self.bottom_left.datetime
         y0 = self.bottom_left.price

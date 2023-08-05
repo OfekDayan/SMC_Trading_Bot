@@ -21,7 +21,7 @@ class FibonacciRetracement:
         from_time = self.swing_start.datetime
 
         for level, color in level_and_color.items():
-            price = self.__get_level_price(level)
+            price = self.get_level_price(level)
             figure.add_trace(go.Scatter(x=[from_time, to_time], y=[price, price], mode='lines', name=f'Fibo {level}%',
                                         line=dict(color=color, dash='dash')))
 
@@ -32,9 +32,9 @@ class FibonacciRetracement:
 
     def is_healthy_retracement(self, retracement_price: float):
         retracement_level = 38.2
-        return retracement_price <= self.__get_level_price(retracement_level)
+        return retracement_price <= self.get_level_price(retracement_level)
 
-    def __get_level_price(self, level: float) -> float:
+    def get_level_price(self, level: float) -> float:
         from_price = self.swing_start.price
         to_price = self.swing_end.price
         range = abs(from_price - to_price)
