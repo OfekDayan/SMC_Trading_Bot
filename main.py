@@ -20,8 +20,6 @@ app = dash.Dash(__name__)
 symbol = 'BTCUSDT'
 timeframe = '1h'
 
-starting_live_datetime = datetime.datetime(2023, 8, 1)
-
 exchange = ccxt.binance()
 exchange.options = {'defaultType': 'future', 'adjustForTimeDifference': True}
 ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=500)
@@ -30,22 +28,23 @@ original_df = pd.DataFrame(ohlcv, columns=['Timestamp', 'Open', 'High', 'Low', '
 original_df['Timestamp'] = pd.to_datetime(original_df['Timestamp'], unit='ms')
 original_df.set_index('Timestamp', inplace=True)
 
-starting_index = original_df.index.get_loc(starting_live_datetime)
 counter = 0
-
-chat_id = 0
+chat_id = 1451941685
+starting_live_datetime = datetime.datetime(2023, 8, 1)
+starting_index = original_df.index.get_loc(starting_live_datetime)
 
 # Define the layout of the Dash app
 app.layout = html.Div([
     dcc.Graph(id='candlestick-chart'),
     dcc.Interval(
         id='interval-component',
-        interval=1*500,  # 1 second in milliseconds
+        interval=1 * 1000,
         n_intervals=0
     ),
     html.Button('Freeze Chart', id='freeze-button', n_clicks=0),
     html.Button('Resume Chart', id='resume-button', n_clicks=0)
 ])
+
 
 @app.callback(
     Output('interval-component', 'disabled'),
@@ -67,6 +66,7 @@ def update_chart_interval(freeze_clicks, resume_clicks, interval_disabled):
     else:
         # If no button was clicked, keep the current state
         return interval_disabled
+
 
 @app.callback(
     Output('candlestick-chart', 'figure'),
@@ -137,12 +137,10 @@ def send_image(image_path: str, caption: str = None):
     with open(image_path, 'rb') as image_file:
         bot.send_photo(chat_id, image_file, caption)
 
-
-@bot.message_handler()
-def start(message):\
-    # TODO: why global does not work?
-    global chat_id
-    chat_id = message.chat.id
+# @bot.message_handler()
+# def start(message):
+#     global chat_id
+#     chat_id = message.chat.id
 
 
 def send_signal(image_path: str):
@@ -158,7 +156,8 @@ def send_signal(image_path: str):
 
 @bot.poll_answer_handler()
 def handle_poll_answer(pollAnswer):
-    print(pollAnswer)
+    print(f"Bulbul: {pollAnswer}")
+    print(pollAnswer['option_ids'])
 
 
 def bot_polling():
@@ -168,4 +167,4 @@ def bot_polling():
 if __name__ == "__main__":
     bot_thread = threading.Thread(target=bot_polling)
     bot_thread.start()
-    app.run_server(debug=True)
+    app.run_server(debug=False)

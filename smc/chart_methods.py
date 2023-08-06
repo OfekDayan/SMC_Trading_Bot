@@ -17,11 +17,13 @@ class ChartMethods:
     def calculate_imbalances(self, figure: go.Figure = None):
         self.df['Imbalance'] = 0
 
-        self.df.loc[self.df['Close'] > self.df['Open'], 'Imbalance'] = self.df['Low'].shift(-1) - self.df['High'].shift(1)
+        self.df.loc[self.df['Close'] > self.df['Open'], 'Imbalance'] = self.df['Low'].shift(-1) - self.df['High'].shift(
+            1)
         self.df.loc[self.df['Close'] > self.df['Open'], 'Imbalance_Start'] = self.df['Low'].shift(-1)
         self.df.loc[self.df['Close'] > self.df['Open'], 'Imbalance_End'] = self.df['High'].shift(1)
 
-        self.df.loc[self.df['Open'] > self.df['Close'], 'Imbalance'] = self.df['Low'].shift(1) - self.df['High'].shift(-1)
+        self.df.loc[self.df['Open'] > self.df['Close'], 'Imbalance'] = self.df['Low'].shift(1) - self.df['High'].shift(
+            -1)
         self.df.loc[self.df['Open'] > self.df['Close'], 'Imbalance_Start'] = self.df['High'].shift(-1)
         self.df.loc[self.df['Open'] > self.df['Close'], 'Imbalance_End'] = self.df['Low'].shift(1)
 

@@ -56,6 +56,9 @@ class DecisionManager:
 
         signal_point = self.get_signal_point()
 
+        if signal_point is None:
+            return False
+
         # Get the current (last) candle
         # last_candle_row = self.pullback_zone_df.iloc[-1]
         last_candle_datetime = self.pullback_zone_df.index[-1]
