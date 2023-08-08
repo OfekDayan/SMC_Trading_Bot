@@ -31,7 +31,7 @@ class DecisionManager:
         fibo_level = fibonacci_retracement.get_level_price(WANTED_FIBO_LEVEL)
         return fibo_level
 
-    def get_signal_point(self, chart: go.Figure = None):
+    def get_signal_point(self):
         price_to_send_signal = self.get_signal_price_level()
         # fibonacci_retracement.plot(chart, price_to_send_signal.datetime)
 
@@ -42,21 +42,20 @@ class DecisionManager:
             if (self.order_block.is_bullish and candle.low_price <= price_to_send_signal) or \
                     (not self.order_block.is_bullish and candle.high_price >= price_to_send_signal):
                 signal_point = Point(candle_time, price_to_send_signal)
-
-                if chart:
-                    signal_point.plot(chart, 'Orange', 10)
-
                 return signal_point
 
         return None
 
-    def is_to_send_signal(self):
-        if self.order_block.is_failed or self.order_block.is_touched:
-            return False
-
+    def is_to_send_signal(self, chart: go.Figure = None):
         signal_point = self.get_signal_point()
 
         if signal_point is None:
+            return False
+
+        if chart:
+            signal_point.plot(chart, 'Orange', 10)
+
+        if self.order_block.is_failed or self.order_block.is_touched:
             return False
 
         # Get the current (last) candle

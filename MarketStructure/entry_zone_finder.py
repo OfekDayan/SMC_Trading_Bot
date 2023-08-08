@@ -14,8 +14,7 @@ class EntryZoneFinder:
         self.figure = figure
         self.df = df
 
-    def find(self, choches_and_boses: List[HorizontalTrendLine], market_structure_points: List[Point]) -> list[
-        (OrderBlock, pandas.DataFrame)]:
+    def find(self, choches_and_boses: List[HorizontalTrendLine], market_structure_points: List[Point]) -> list[(OrderBlock, pandas.DataFrame)]:
         order_blocks_and_pullback_df = []
 
         for smc_level in choches_and_boses:

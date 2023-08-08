@@ -11,6 +11,7 @@ class OrderBlock:
         self.is_bullish = is_bullish
         self.is_touched = False
         self.is_failed = False
+        self.id = int(self.bottom_left.datetime.timestamp())
 
     def get_top_left(self):
         return Point(self.bottom_left.datetime, self.top_right.price)
