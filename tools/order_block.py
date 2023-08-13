@@ -2,6 +2,7 @@ from datetime import datetime
 import pandas
 import plotly.graph_objects as go
 from tools.point import Point
+from user_options import UserOption
 
 
 class OrderBlock:
@@ -11,6 +12,8 @@ class OrderBlock:
         self.is_bullish = is_bullish
         self.is_touched = False
         self.is_failed = False
+        self.user_decision = UserOption.NONE
+        self.ninty_percent_fibo_price = None
         self.id = int(self.bottom_left.datetime.timestamp())
 
     def get_top_left(self):

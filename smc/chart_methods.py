@@ -1,6 +1,4 @@
 import pandas
-import pandas as pd
-
 from Models.candle import Candle
 import plotly.graph_objects as go
 import talib
@@ -42,26 +40,26 @@ class ChartMethods:
                 candle.plot_imbalance(figure)
 
     def calculate_candles_patterns(self):
-        # Momentum
         self.__apply_candle('Marubozu', talib.CDLMARUBOZU)
         self.__apply_candle('Engulfing', talib.stream_CDLENGULFING)
 
-        # Indecision
         self.__apply_candle('Doji', talib.CDLDOJI)
-        self.__apply_candle('Doji_Star', talib.stream_CDLDOJISTAR)
-        self.__apply_candle('Dragonfly_Doji', talib.CDLDRAGONFLYDOJI)
-        self.__apply_candle('Gravestone_Doji', talib.stream_CDLGRAVESTONEDOJI)
-        self.__apply_candle('Long_Legged_Doji', talib.stream_CDLLONGLEGGEDDOJI)
+        self.__apply_candle('Doji_star', talib.stream_CDLDOJISTAR)
+        self.__apply_candle('Dragonfly_doji', talib.CDLDRAGONFLYDOJI)
+        self.__apply_candle('Gravestone_doji', talib.stream_CDLGRAVESTONEDOJI)
+        self.__apply_candle('Long_legged_doji', talib.stream_CDLLONGLEGGEDDOJI)
 
-        self.__apply_candle('Pinbar', talib.CDLHAMMER)
+        self.__apply_candle('Hammer', talib.CDLHAMMER)
+        self.__apply_candle('Inverted_hammer', talib.stream_CDLINVERTEDHAMMER)
+        self.__apply_candle('Spinning_top', talib.stream_CDLSPINNINGTOP)
+        self.__apply_candle('Hanging_man', talib.CDLHANGINGMAN)
+        self.__apply_candle('Shooting_star', talib.stream_CDLSHOOTINGSTAR)
+        self.__apply_candle('Morning_tar', talib.CDLMORNINGSTAR)
+        self.__apply_candle('Dark_cloud_cover', talib.CDLDARKCLOUDCOVER)
+        self.__apply_candle('Evening_star', talib.CDLEVENINGSTAR)
+        self.__apply_candle('Piercing_line', talib.CDLPIERCING)
 
-        self.__apply_candle('Inverted_Pinbar', talib.stream_CDLINVERTEDHAMMER)
 
-        self.__apply_candle('Spinning_Top', talib.stream_CDLSPINNINGTOP)
-
-        self.__apply_candle('Hanging_Man', talib.CDLHANGINGMAN)
-
-        self.__apply_candle('Shooting_Star', talib.stream_CDLSHOOTINGSTAR)
 
     def calculate_rsi(self):
         pass

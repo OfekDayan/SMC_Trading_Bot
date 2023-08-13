@@ -11,9 +11,7 @@ class DecisionManager:
         self.order_block = order_block
         self.pullback_zone_df = pullback_zone_df
 
-    def get_signal_price_level(self):
-        WANTED_FIBO_LEVEL = 90
-
+    def get_price_by_fib_level(self, fibo_level):
         if self.order_block.is_bullish:
             swing_start = self.order_block.get_top_left()
 
@@ -28,8 +26,12 @@ class DecisionManager:
             swing_end = Point(end_time, price)
 
         fibonacci_retracement = FibonacciRetracement(swing_start, swing_end)
-        fibo_level = fibonacci_retracement.get_level_price(WANTED_FIBO_LEVEL)
+        fibo_level = fibonacci_retracement.get_level_price(fibo_level)
         return fibo_level
+
+    def get_signal_price_level(self):
+        WANTED_FIBO_LEVEL = 80
+        return self.get_price_by_fib_level(WANTED_FIBO_LEVEL)
 
     def get_signal_point(self):
         price_to_send_signal = self.get_signal_price_level()
