@@ -59,8 +59,6 @@ class ChartMethods:
         self.__apply_candle('Evening_star', talib.CDLEVENINGSTAR)
         self.__apply_candle('Piercing_line', talib.CDLPIERCING)
 
-
-
     def calculate_rsi(self):
         pass
 

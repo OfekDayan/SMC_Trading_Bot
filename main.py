@@ -37,7 +37,7 @@ timeframe = '1h'
 
 exchange = ccxt.binance()
 exchange.options = {'defaultType': 'future', 'adjustForTimeDifference': True}
-ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=500)
+ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=600)
 
 original_df = pd.DataFrame(ohlcv, columns=['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
 original_df['Timestamp'] = pd.to_datetime(original_df['Timestamp'], unit='ms')
@@ -45,8 +45,10 @@ original_df.set_index('Timestamp', inplace=True)
 
 counter = 0
 chat_id = 1451941685
-starting_live_datetime = datetime.datetime(2023, 8, 1)
+starting_live_datetime = datetime.datetime(2023, 7, 26, 19)
 starting_index = original_df.index.get_loc(starting_live_datetime)
+
+lock = threading.Lock()
 
 # Define the layout of the Dash app
 app.layout = html.Div([
@@ -54,7 +56,8 @@ app.layout = html.Div([
     dcc.Interval(
         id='interval-component',
         interval=1 * 1000,
-        n_intervals=0
+        n_intervals=0,
+        disabled=False
     ),
     html.Button('Freeze Chart', id='freeze-button', n_clicks=0),
     html.Button('Resume Chart', id='resume-button', n_clicks=0)
@@ -125,6 +128,8 @@ def update_chart(n, interval_disabled):
         # Exit the while loop as the new index is greater than the maximum index
         return dash.no_update
 
+    lock.acquire()
+
     df = original_df.iloc[:new_index]
     counter += 1
 
@@ -133,6 +138,8 @@ def update_chart(n, interval_disabled):
 
     # Analyze
     results = get_all_order_blocks(df, chart)
+
+    chart.update_layout(showlegend=False, xaxis_rangeslider_visible=False, width=width_pixels, height=height_pixels)
 
     # Check each order block
     for result in results:
@@ -145,8 +152,6 @@ def update_chart(n, interval_disabled):
         # Signals finder
         decision_manager = DecisionManager(order_block, pullback_zone_df)
         is_to_send_signal = decision_manager.is_to_send_signal(chart)
-
-        chart.update_layout(showlegend=False, xaxis_rangeslider_visible=False, width=width_pixels, height=height_pixels)
 
         if is_to_send_signal:
             # Send notification to user
@@ -167,44 +172,49 @@ def update_chart(n, interval_disabled):
     active_order_blocks = db_manager.get_active_order_blocks()
     db_manager.close_connection()
 
-    new_candle_row = df.tail(1).iloc[0]
-    current_candle = Candle(new_candle_row.index[0], new_candle_row)
+    if active_order_blocks:
+        new_candle_row = df.tail(1).iloc[0]
+        current_candle = Candle(new_candle_row.index[0], new_candle_row)
 
-    for active_order_block in active_order_blocks:
-        match active_order_block.user_decision:
+        for active_order_block in active_order_blocks:
+            match active_order_block.user_decision:
+                case UserOption.NOTIFY_PRICE_HIT_ODB.value:
 
-            case UserOption.NOTIFY_PRICE_HIT_ODB:
-                is_price_hits_odb = current_candle.low_price <= active_order_block.top_right.price if \
-                    active_order_block.is_bullish else current_candle.high_price >= active_order_block.bottom_left.price
+                    is_price_hits_odb = current_candle.low_price <= active_order_block.top_right.price if \
+                        active_order_block.is_bullish else current_candle.high_price >= active_order_block.bottom_left.price
 
-                if is_price_hits_odb:
-                    # Send notification - trade or ignore
-                    image_path = "chart.jpg"
-                    chart.write_image(image_path, scale=4)
-                    poll_id = send_price_hit_odb_notification(image_path)
+                    if is_price_hits_odb:
+                        # Send notification - trade or ignore
+                        image_path = "chart.jpg"
+                        chart.write_image(image_path, scale=4)
+                        poll_id = send_price_hit_odb_notification(image_path)
 
-                    # Update the poll id
-                    db_manager = DatabaseManager("SmcTradingBotDB.db")
-                    db_manager.update_poll_id(active_order_block.id, poll_id)
-                    db_manager.close_connection()
+                        # Update the poll id and user decision
+                        db_manager = DatabaseManager("SmcTradingBotDB.db")
+                        db_manager.update_poll_id(active_order_block.id, poll_id)
+                        db_manager.update_user_decision(active_order_block.id, UserOption.NONE)
+                        db_manager.close_connection()
 
-            case UserOption.NOTIFY_REVERSAL_CANDLE_FOUND:
-                # Check is the closing price of the candle is between the 90% fibo price to the end price of the ODB
-                ninty_percent_fibo_price = active_order_block.ninty_percent_fibo_price
+                case UserOption.NOTIFY_REVERSAL_CANDLE_FOUND.value:
+                    # Check is the closing price of the candle is between the 90% fibo price to the end price of the ODB
+                    ninty_percent_fibo_price = active_order_block.ninty_percent_fibo_price
 
-                is_candle_in_checking_range = active_order_block.bottom_left.price <= current_candle.close_price <= ninty_percent_fibo_price \
-                    if active_order_block.is_bullish else ninty_percent_fibo_price <= current_candle.close_price <= active_order_block.top_right.price
+                    is_candle_in_checking_range = active_order_block.bottom_left.price <= current_candle.close_price <= ninty_percent_fibo_price \
+                        if active_order_block.is_bullish else ninty_percent_fibo_price <= current_candle.close_price <= active_order_block.top_right.price
 
-                if is_candle_in_checking_range and current_candle.is_reversal():
-                    image_path = "chart.jpg"
-                    chart.write_image(image_path, scale=4)
-                    candle_type = current_candle.get_candle_type()
-                    poll_id = send_reversal_candle_found_on_odb_notification(image_path, candle_type)
+                    if is_candle_in_checking_range and current_candle.is_reversal():
+                        image_path = "chart.jpg"
+                        chart.write_image(image_path, scale=4)
+                        candle_type = current_candle.get_candle_type()
+                        poll_id = send_reversal_candle_found_on_odb_notification(image_path, candle_type)
 
-                    # Update the poll id
-                    db_manager = DatabaseManager("SmcTradingBotDB.db")
-                    db_manager.update_poll_id(active_order_block.id, poll_id)
-                    db_manager.close_connection()
+                        # Update the poll id and user decision
+                        db_manager = DatabaseManager("SmcTradingBotDB.db")
+                        db_manager.update_poll_id(active_order_block.id, poll_id)
+                        db_manager.update_user_decision(active_order_block.id, UserOption.NONE)
+                        db_manager.close_connection()
+
+    lock.release()
 
     return chart
 
@@ -243,9 +253,11 @@ def send_second_notification(image_path: str, message: str):
     options = [user_option_and_text[0][1], user_option_and_text[1][1]]
     return send_poll(message, options).poll.id
 
+
 def send_price_hit_odb_notification(image_path: str):
     MESSAGE_TO_SEND = "I'm notifying you that the price hit's the order block - what should I do?"
     return send_second_notification(image_path, MESSAGE_TO_SEND)
+
 
 def send_reversal_candle_found_on_odb_notification(image_path: str, candle_type):
     MESSAGE_TO_SEND = f"I'm notifying you that the I found a reversal candle ({candle_type}) on the order block - what should I do?"

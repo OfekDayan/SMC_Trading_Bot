@@ -104,19 +104,19 @@ class Candle:
         return self.__row['Doji']
 
     def is_doji_star(self):
-        return self.__row['Doji_Star']
+        return self.__row['Doji_star']
 
     def is_dragonfly_doji(self):
-        return self.__row['Dragonfly_Doji']
+        return self.__row['Dragonfly_doji']
 
     def is_gravestone_doji(self):
-        return self.__row['Gravestone_Doji']
+        return self.__row['Gravestone_doji']
 
     def is_long_legged__doji(self):
-        return self.__row['Long_Legged_Doji']
+        return self.__row['Long_legged_doji']
 
     def is_spinning_top(self):
-        return self.__row['Spinning_Top']
+        return self.__row['Spinning_top']
 
     # Momentum
     def is_marubozu(self):

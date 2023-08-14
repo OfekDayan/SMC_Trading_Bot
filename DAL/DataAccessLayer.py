@@ -59,7 +59,6 @@ class DatabaseManager:
         existing_order_block = cursor.fetchone()
 
         if existing_order_block:
-            print("Order block with the same ID already exists in the database.")
             return
 
         cursor.execute('INSERT INTO Point (x, y) VALUES (?, ?)',
@@ -101,8 +100,8 @@ class DatabaseManager:
             bottom_left = Point(date_time=bottom_left_x_as_timestamp, price=row[8])
 
             # Convert bottom_left_x
-            bottom_left_x_as_timestamp = pd.Timestamp(row[9])
-            top_right = Point(date_time=bottom_left_x_as_timestamp, price=row[10])
+            top_right_x_as_timestamp = pd.Timestamp(row[9])
+            top_right = Point(date_time=top_right_x_as_timestamp, price=row[10])
 
             order_block = OrderBlock(bottom_left, top_right, row[1] == 'bullish')
             order_block.is_touched = bool(row[2])
@@ -127,7 +126,7 @@ class DatabaseManager:
                    p1.x AS bottom_left_x, 
                    p1.y AS bottom_left_y, 
                    p2.x AS top_right_x, 
-                   p2.y AS top_right_y,
+                   p2.y AS top_right_y
             FROM OrderBlock AS ob
             JOIN Point AS p1 ON ob.buttonLeftPointId = p1.id
             JOIN Point AS p2 ON ob.topRightPointId = p2.id
@@ -180,21 +179,22 @@ class DatabaseManager:
     def get_active_order_blocks(self):
         cursor = self.connection.cursor()
 
-        query = f'''
-                    SELECT ob.id, 
-                           ob.type, 
-                           ob.isTouched, 
-                           ob.isFailed, 
-                           ob.userDecision, 
-                           ob.isTraded, 
-                           p1.x AS bottom_left_x, 
-                           p1.y AS bottom_left_y, 
-                           p2.x AS top_right_x, 
-                           p2.y AS top_right_y
-                    FROM OrderBlock AS ob
-                    JOIN Point AS p1 ON ob.buttonLeftPointId = p1.id
-                    JOIN Point AS p2 ON ob.topRightPointId = p2.id
-                    WHERE ob.isTraded = 0 AND (userDecision = {UserOption.NOTIFY_PRICE_HIT_ODB.value} OR userDecision = {UserOption.NOTIFY_REVERSAL_CANDLE_FOUND.value})
+        query = f''' 
+                   SELECT ob.id, 
+                   ob.type, 
+                   ob.isTouched, 
+                   ob.isFailed, 
+                   ob.userDecision, 
+                   ob.isTraded, 
+                   ob.nintyPercentFiboPrice,
+                   p1.x AS bottom_left_x, 
+                   p1.y AS bottom_left_y, 
+                   p2.x AS top_right_x, 
+                   p2.y AS top_right_y
+                FROM OrderBlock AS ob
+                JOIN Point AS p1 ON ob.buttonLeftPointId = p1.id
+                JOIN Point AS p2 ON ob.topRightPointId = p2.id
+                WHERE ob.isTraded = 0 AND (userDecision = {UserOption.NOTIFY_PRICE_HIT_ODB.value} OR userDecision = {UserOption.NOTIFY_REVERSAL_CANDLE_FOUND.value})
                 '''
 
         cursor.execute(query)
