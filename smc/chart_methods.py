@@ -8,9 +8,7 @@ class ChartMethods:
     def __init__(self, df: pandas.DataFrame):
         self.df = df
 
-    def calculate(self, figure: go.Figure = None):
-        self.calculate_candles_patterns()
-        self.calculate_imbalances(figure)
+
 
     def calculate_imbalances(self, figure: go.Figure = None):
         self.df['Imbalance'] = 0

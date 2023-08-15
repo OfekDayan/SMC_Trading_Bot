@@ -1,6 +1,6 @@
 import pandas
 from typing import List
-from MarketStructure.pivot_points import PivotPoints
+from MarketStructure.pivot_points_detector import PivotPointsDetector
 from Models.candle import Candle
 from Models.entry_zone import EntryZone
 from tools.order_block import OrderBlock
@@ -98,13 +98,13 @@ class EntryZoneFinder:
 
     def __find_pivot_point_caused_bos_choch(self, suspected_pivot_point: Point, entry_zone: EntryZone) -> Point:
         # find minor's trend pivot points
-        pivot_points = PivotPoints(entry_zone.df)
-        pivot_points.find()
-        pivot_points.plot_pivot_points(self.figure)
+        pivot_points_detector = PivotPointsDetector(entry_zone.df)
+        pivot_points_detector.find()
+        pivot_points_detector.plot_pivot_points(self.figure)
 
         # find last pivot point caused the CHOCH/BOS
-        if pivot_points.market_structure_points:
-            pivot_point_starts_the_swing = pivot_points.market_structure_points[-1]
+        if pivot_points_detector.pivot_points:
+            pivot_point_starts_the_swing = pivot_points_detector.pivot_points[-1]
 
         else:  # no minor trend
             pivot_point_starts_the_swing = suspected_pivot_point
