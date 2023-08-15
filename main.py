@@ -37,15 +37,23 @@ chart_width_pixels = 800
 chart_height_pixels = 600
 
 app.layout = html.Div([
-    dcc.Graph(id='candlestick-chart'),
+    dcc.Graph(id='candlestick-chart1'),
     dcc.Interval(
-        id='interval-component',
+        id='interval1',
         interval=1 * 1000,
         n_intervals=0,
         disabled=False
     ),
-    html.Button('Freeze Chart', id='freeze-button', n_clicks=0),
-    html.Button('Resume Chart', id='resume-button', n_clicks=0)
+
+    dcc.Graph(id='candlestick-chart2'),
+    dcc.Interval(
+        id='interval2',
+        interval=1 * 1000,
+        n_intervals=0,
+        disabled=False
+    ),
+    # html.Button('Freeze Chart', id='freeze-button', n_clicks=0),
+    # html.Button('Resume Chart', id='resume-button', n_clicks=0)
 ])
 
 
@@ -165,67 +173,30 @@ def handle_new_order_blocks(order_block: OrderBlock, pullback_zone_df: pandas.Da
         db_manager.close_connection()
 
 
-original_df = get_candlestick_data_frame('BTCUSDT')
-
-starting_index = original_df.index.get_loc(datetime.datetime(2023, 7, 26, 19))
-
-candle_counter = 0
-
-lock = threading.Lock()
-
-
-@app.callback(
-    Output('interval-component', 'disabled'),
-    Input('freeze-button', 'n_clicks'),
-    Input('resume-button', 'n_clicks'),
-    State('interval-component', 'disabled')
-)
-def update_chart_interval(freeze_clicks, resume_clicks, interval_disabled):
-    # Determine which button was clicked last
-    ctx = dash.callback_context
-    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
-
-    if button_id == 'freeze-button':
-        # If the freeze button was clicked, disable the interval to freeze the chart updating
-        return True
-    elif button_id == 'resume-button':
-        # If the resume button was clicked, enable the interval to resume the chart updating
-        return False
-    else:
-        # If no button was clicked, keep the current state
-        return interval_disabled
-
-
-@app.callback(
-    Output('candlestick-chart', 'figure'),
-    Input('interval-component', 'n_intervals'),
-    State('interval-component', 'disabled')
-)
-def update_chart(n, interval_disabled):
-    global candle_counter
-
+def get_updated_chart(interval_disabled, df: pandas.DataFrame, candles_counter: int, start_date_to_run_live_candles) -> go.Figure:
     if interval_disabled:
         # If the interval is disabled (chart frozen), return the current figure without updating
         return dash.no_update
 
-    new_index = starting_index + candle_counter
+    start_candles_index = df.index.get_loc(start_date_to_run_live_candles)
 
-    if new_index >= len(original_df):
+    new_index = start_candles_index + candles_counter
+
+    if new_index >= len(df):
         # Exit the while loop as the new index is greater than the maximum index
         return dash.no_update
 
-    lock.acquire()
-
     df = original_df.iloc[:new_index]
-    candle_counter += 1
 
     # create candlesticks chart
-    chart = go.Figure(data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'])])
+    chart = go.Figure(
+        data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'])])
 
     # Analyze
     results = get_all_order_blocks(df, chart)
 
-    chart.update_layout(showlegend=False, xaxis_rangeslider_visible=False, width=chart_width_pixels, height=chart_height_pixels)
+    chart.update_layout(showlegend=False, xaxis_rangeslider_visible=False, width=chart_width_pixels,
+                        height=chart_height_pixels)
 
     # Check each order block
     for result in results:
@@ -245,8 +216,100 @@ def update_chart(n, interval_disabled):
     # Handle existing order blocks
     handle_existing_order_blocks(chart, last_candle)
 
-    lock.release()
     return chart
+
+
+chart_contexts = []
+
+symbols = ['BTCUSDT', 'ETHUSDT']
+
+for symbol in symbols:
+    candles_counter = 0
+    pad_lock = threading.Lock()
+    df = get_candlestick_data_frame(symbol)
+    start_date_to_run_live_candles = datetime.datetime(2023, 7, 26, 19)
+
+    chart_contexts.append([df, start_date_to_run_live_candles, candles_counter, pad_lock])
+
+    pass
+#
+# original_df = get_candlestick_data_frame('BTCUSDT')
+#
+# starting_index = original_df.index.get_loc(datetime.datetime(2023, 7, 26, 19))
+#
+# candle_counter = 0
+#
+# lock = threading.Lock()
+
+
+# @app.callback(
+#     Output('interval1', 'disabled'),
+#     Input('freeze-button', 'n_clicks'),
+#     Input('resume-button', 'n_clicks'),
+#     State('interval1', 'disabled')
+# )
+# def update_chart_interval(freeze_clicks, resume_clicks, interval_disabled):
+#     # Determine which button was clicked last
+#     ctx = dash.callback_context
+#     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+#
+#     if button_id == 'freeze-button':
+#         # If the freeze button was clicked, disable the interval to freeze the chart updating
+#         return True
+#     elif button_id == 'resume-button':
+#         # If the resume button was clicked, enable the interval to resume the chart updating
+#         return False
+#     else:
+#         # If no button was clicked, keep the current state
+#         return interval_disabled
+
+
+@app.callback(
+    Output('candlestick-chart1', 'figure'),
+    Input('interval1', 'n_intervals'),
+    State('interval1', 'disabled')
+)
+def update_chart(n, interval_disabled):
+    CHART_CONTEXT_INDEX = 0
+    chart_context = chart_contexts[CHART_CONTEXT_INDEX]
+
+    df = chart_context[0]
+    start_date_to_run_live_candles = chart_context[1]
+    candles_counter = chart_context[2]
+    pad_lock = chart_context[3]
+
+    pad_lock.acquire()
+
+    updated_chart = get_updated_chart(interval_disabled, df, candles_counter, start_date_to_run_live_candles)
+    chart_context[2] += 1
+
+    pad_lock.release()
+
+    return updated_chart
+
+
+@app.callback(
+    Output('candlestick-chart2', 'figure'),
+    Input('interval2', 'n_intervals'),
+    State('interval2', 'disabled')
+)
+def update_chart(n, interval_disabled):
+    CHART_CONTEXT_INDEX = 1
+    chart_context = chart_contexts[CHART_CONTEXT_INDEX]
+
+    df = chart_context[0]
+    start_date_to_run_live_candles = chart_context[1]
+    candles_counter = chart_context[2]
+    pad_lock = chart_context[3]
+
+    pad_lock.acquire()
+
+    updated_chart = get_updated_chart(interval_disabled, df, candles_counter, start_date_to_run_live_candles)
+    chart_context[2] += 1
+
+    pad_lock.release()
+
+    return updated_chart
 
 
 # Telegram BOT methods
