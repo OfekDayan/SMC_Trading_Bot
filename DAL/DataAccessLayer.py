@@ -45,6 +45,7 @@ class DatabaseManager:
                 isTraded INTEGER,
                 pollId INTEGER,
                 nintyPercentFiboPrice FLOAT,
+                symbol TEXT,
                 FOREIGN KEY (buttonLeftPointId) REFERENCES Point(id),
                 FOREIGN KEY (topRightPointId) REFERENCES Point(id)
             )
@@ -52,7 +53,7 @@ class DatabaseManager:
         cursor.execute(create_orderblock_table_query)
         conn.commit()
 
-    def insert_order_block(self, order_block, poll_id):
+    def insert_order_block(self, order_block: OrderBlock, poll_id):
         cursor = self.connection.cursor()
 
         cursor.execute('SELECT id FROM OrderBlock WHERE id = ?', (order_block.id,))
@@ -73,8 +74,8 @@ class DatabaseManager:
         order_block_type = "bullish" if order_block.is_bullish else "bearish"
 
         cursor.execute('''
-            INSERT INTO OrderBlock (id, buttonLeftPointId, topRightPointId, type, isTouched, isFailed, userDecision, isTraded, pollId, nintyPercentFiboPrice)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO OrderBlock (id, buttonLeftPointId, topRightPointId, type, isTouched, isFailed, userDecision, isTraded, pollId, nintyPercentFiboPrice, symbol)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             order_block.id,
             bottom_left_point_id,
@@ -85,13 +86,14 @@ class DatabaseManager:
             0,
             0,
             poll_id,
-            order_block.ninty_percent_fibo_price
+            order_block.ninty_percent_fibo_price,
+            order_block.symbol
         ))
 
         self.connection.commit()
 
+
     def convert_orderblocks_results_to_list(self, db_results):
-        format_string = "%Y-%m-%d %H:%M:%S.%f"
         order_blocks = []
 
         for row in db_results:
@@ -108,6 +110,7 @@ class DatabaseManager:
             order_block.is_failed = bool(row[3])
             order_block.user_decision = row[4]
             order_block.ninty_percent_fibo_price = row[6]
+            order_blocks.symbol = row[7]
             order_blocks.append(order_block)
 
         return order_blocks
@@ -123,6 +126,7 @@ class DatabaseManager:
                    ob.userDecision, 
                    ob.isTraded, 
                    ob.nintyPercentFiboPrice,
+                   ob.symbol,
                    p1.x AS bottom_left_x, 
                    p1.y AS bottom_left_y, 
                    p2.x AS top_right_x, 
@@ -147,6 +151,7 @@ class DatabaseManager:
                    ob.userDecision, 
                    ob.isTraded, 
                    ob.nintyPercentFiboPrice,
+                   ob.symbol,
                    p1.x AS bottom_left_x, 
                    p1.y AS bottom_left_y, 
                    p2.x AS top_right_x, 
@@ -187,6 +192,7 @@ class DatabaseManager:
                    ob.userDecision, 
                    ob.isTraded, 
                    ob.nintyPercentFiboPrice,
+                   ob.symbol,
                    p1.x AS bottom_left_x, 
                    p1.y AS bottom_left_y, 
                    p2.x AS top_right_x, 

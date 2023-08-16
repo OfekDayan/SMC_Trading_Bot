@@ -10,9 +10,10 @@ from tools.horizontal_trend_line import HorizontalTrendLine
 
 
 class EntryZoneFinder:
-    def __init__(self, df: pandas.DataFrame, figure: go.Figure):
+    def __init__(self, df: pandas.DataFrame, figure: go.Figure, symbol: str):
         self.figure = figure
         self.df = df
+        self.symbol = symbol
 
     def find(self, choches_and_boses: List[HorizontalTrendLine], market_structure_points: List[Point]) -> list[(OrderBlock, pandas.DataFrame)]:
         order_blocks_and_pullback_df = []
@@ -80,7 +81,7 @@ class EntryZoneFinder:
     def __get_order_block(self, institutional_candle: Candle, is_bullish: bool) -> OrderBlock:
         odb_bottom_left = Point(institutional_candle.time, institutional_candle.low_price)
         odb_top_right = Point(self.df.index[-1], institutional_candle.high_price)
-        return OrderBlock(odb_bottom_left, odb_top_right, is_bullish)
+        return OrderBlock(odb_bottom_left, odb_top_right, self.symbol, is_bullish)
 
     def __find_institutional_candle(self, pivot_point_starts_the_swing: Point, is_bullish: bool) -> Candle:
         # find the institutional candle

@@ -1,4 +1,5 @@
 import datetime
+import os.path
 import threading
 import ccxt
 import dash
@@ -16,6 +17,7 @@ from smc.chart_methods import ChartMethods
 import telebot
 from tools.order_block import OrderBlock
 from user_options import UserOption
+from PIL import Image
 
 user_option_and_text = [
     (UserOption.TRADE, 'Take the trade!'),
@@ -32,29 +34,20 @@ BOT_ID = '5341091307:AAHGuAJDKLl3zzjIpfGhaVpW3Y3UgBNAXG4'
 bot = telebot.TeleBot(BOT_ID)
 
 # Dash app
+INTERVAL = 3000
 app = dash.Dash(__name__)
-chart_width_pixels = 800
+# chart_width_pixels = 800
 chart_height_pixels = 600
 
-app.layout = html.Div([
-    dcc.Graph(id='candlestick-chart1'),
-    dcc.Interval(
-        id='interval1',
-        interval=1 * 1000,
-        n_intervals=0,
-        disabled=False
-    ),
+is_to_update_symbols = True
 
-    dcc.Graph(id='candlestick-chart2'),
-    dcc.Interval(
-        id='interval2',
-        interval=1 * 1000,
-        n_intervals=0,
-        disabled=False
-    ),
-    # html.Button('Freeze Chart', id='freeze-button', n_clicks=0),
-    # html.Button('Resume Chart', id='resume-button', n_clicks=0)
-])
+
+def get_coin_image_path(symbol: str):
+    EXTENSION = 'png'
+    IMAGES_FOLDER_PATH = 'coins_images'
+    coin = symbol.replace('USDT', '').lower()
+    path = os.path.join(IMAGES_FOLDER_PATH, f'{coin}.{EXTENSION}')
+    return Image.open(path)
 
 
 def get_candlestick_data_frame(symbol: str) -> pandas.DataFrame:
@@ -73,7 +66,7 @@ def get_candlestick_data_frame(symbol: str) -> pandas.DataFrame:
     return df
 
 
-def get_all_order_blocks(df: pandas.DataFrame, chart: go.Figure) -> list[(OrderBlock, pandas.DataFrame)]:
+def get_all_order_blocks(df: pandas.DataFrame, symbol: str, chart: go.Figure) -> list[(OrderBlock, pandas.DataFrame)]:
     """
         Gets all order blocks and their pullback dataframe
     """
@@ -93,8 +86,9 @@ def get_all_order_blocks(df: pandas.DataFrame, chart: go.Figure) -> list[(OrderB
     pivot_points = pivot_points_detector.pivot_points
 
     # Find order block and the corresponding pullback data frame
-    entry_zone_finder = EntryZoneFinder(df, chart)
+    entry_zone_finder = EntryZoneFinder(df, chart, symbol)
     result = entry_zone_finder.find(choches_and_boses, pivot_points)
+
     return result
 
 
@@ -173,7 +167,7 @@ def handle_new_order_blocks(order_block: OrderBlock, pullback_zone_df: pandas.Da
         db_manager.close_connection()
 
 
-def get_updated_chart(interval_disabled, df: pandas.DataFrame, candles_counter: int, start_date_to_run_live_candles) -> go.Figure:
+def get_updated_chart(interval_disabled, symbol: str, df: pandas.DataFrame, candles_counter: int, start_date_to_run_live_candles) -> go.Figure:
     if interval_disabled:
         # If the interval is disabled (chart frozen), return the current figure without updating
         return dash.no_update
@@ -186,17 +180,16 @@ def get_updated_chart(interval_disabled, df: pandas.DataFrame, candles_counter: 
         # Exit the while loop as the new index is greater than the maximum index
         return dash.no_update
 
-    df = original_df.iloc[:new_index]
+    df = df.iloc[:new_index]
 
     # create candlesticks chart
-    chart = go.Figure(
-        data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'])])
+    chart = go.Figure(data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'])])
 
     # Analyze
-    results = get_all_order_blocks(df, chart)
+    results = get_all_order_blocks(df, symbol, chart)
 
-    chart.update_layout(showlegend=False, xaxis_rangeslider_visible=False, width=chart_width_pixels,
-                        height=chart_height_pixels)
+    # chart.update_layout(showlegend=False, xaxis_rangeslider_visible=False, width=chart_width_pixels, height=chart_height_pixels)
+    chart.update_layout(showlegend=False, xaxis_rangeslider_visible=False, height=chart_height_pixels)
 
     # Check each order block
     for result in results:
@@ -219,27 +212,110 @@ def get_updated_chart(interval_disabled, df: pandas.DataFrame, candles_counter: 
     return chart
 
 
+def update_chart_by_context_index(context_index: int, interval_disabled: bool):
+    chart_context = chart_contexts[context_index]
+
+    symbol = chart_context[0]
+    df = chart_context[1]
+    start_date_to_run_live_candles = chart_context[2]
+    candles_counter = chart_context[3]
+    pad_lock = chart_context[4]
+
+    pad_lock.acquire()
+    updated_chart = get_updated_chart(interval_disabled, symbol, df, candles_counter, start_date_to_run_live_candles)
+    chart_context[3] += 1
+    pad_lock.release()
+
+    return updated_chart
+
+
 chart_contexts = []
 
-symbols = ['BTCUSDT', 'ETHUSDT']
+symbols = ['BTCUSDT', 'ETHUSDT', 'MATICUSDT', 'BNBUSDT']
 
 for symbol in symbols:
     candles_counter = 0
     pad_lock = threading.Lock()
     df = get_candlestick_data_frame(symbol)
-    start_date_to_run_live_candles = datetime.datetime(2023, 7, 26, 19)
+    start_date_to_run_live_candles = datetime.datetime(2023, 8, 5)
 
-    chart_contexts.append([df, start_date_to_run_live_candles, candles_counter, pad_lock])
+    chart_contexts.append([symbol, df, start_date_to_run_live_candles, candles_counter, pad_lock])
 
-    pass
-#
-# original_df = get_candlestick_data_frame('BTCUSDT')
-#
-# starting_index = original_df.index.get_loc(datetime.datetime(2023, 7, 26, 19))
-#
-# candle_counter = 0
-#
-# lock = threading.Lock()
+
+app.layout = html.Div([
+    html.Div([
+        html.Div([
+            html.Img(id='image1', style={'height': '50px', 'margin-right': '10px'}),
+            html.H3(id='label1', children="Label 1", style={'color': '#333', 'font-size': '28px', 'font-weight': 'bold',
+                                                            'font-family': 'Arial, sans-serif'}),
+            dcc.Graph(id='candlestick-chart1'),
+        ], style={'flex': '1', 'margin': '10px', 'padding': '20px', 'background-color': '#f5f5f5',
+                  'border-radius': '10px', 'box-shadow': '0 0 10px rgba(0, 0, 0, 0.1)'}),
+
+        html.Div([
+            html.Img(id='image2', style={'height': '50px', 'margin-right': '10px'}),
+            html.H3(id='label2', children="Label 2", style={'color': '#333', 'font-size': '28px', 'font-weight': 'bold',
+                                                            'font-family': 'Arial, sans-serif'}),
+            dcc.Graph(id='candlestick-chart2'),
+        ], style={'flex': '1', 'margin': '10px', 'padding': '20px', 'background-color': '#f5f5f5',
+                  'border-radius': '10px', 'box-shadow': '0 0 10px rgba(0, 0, 0, 0.1)'}),
+    ], style={'display': 'flex', 'justify-content': 'center'}),
+
+    html.Div([
+        html.Div([
+            html.Img(id='image3', style={'height': '50px', 'margin-right': '10px'}),
+            html.H3(id='label3', children="Label 3", style={'color': '#333', 'font-size': '28px', 'font-weight': 'bold',
+                                                            'font-family': 'Arial, sans-serif'}),
+            dcc.Graph(id='candlestick-chart3'),
+        ], style={'flex': '1', 'margin': '10px', 'padding': '20px', 'background-color': '#f5f5f5',
+                  'border-radius': '10px', 'box-shadow': '0 0 10px rgba(0, 0, 0, 0.1)'}),
+
+        html.Div([
+            html.Img(id='image4', style={'height': '50px', 'margin-right': '10px'}),
+            html.H3(id='label4', children="Label 4", style={'color': '#333', 'font-size': '28px', 'font-weight': 'bold',
+                                                            'font-family': 'Arial, sans-serif'}),
+            dcc.Graph(id='candlestick-chart4'),
+        ], style={'flex': '1', 'margin': '10px', 'padding': '20px', 'background-color': '#f5f5f5',
+                  'border-radius': '10px', 'box-shadow': '0 0 10px rgba(0, 0, 0, 0.1)'}),
+    ], style={'display': 'flex', 'justify-content': 'center'}),
+
+    dcc.Interval(
+        id='interval1',
+        interval=1 * INTERVAL,
+        n_intervals=0,
+        disabled=False
+    ),
+
+    dcc.Interval(
+        id='interval2',
+        interval=1 * INTERVAL,
+        n_intervals=0,
+        disabled=False
+    ),
+
+    dcc.Interval(
+        id='interval3',
+        interval=1 * INTERVAL,
+        n_intervals=0,
+        disabled=False
+    ),
+
+    dcc.Interval(
+        id='interval4',
+        interval=1 * INTERVAL,
+        n_intervals=0,
+        disabled=False
+    ),
+
+    dcc.Interval(
+        id='labels_interval',
+        interval=1 * INTERVAL,
+        n_intervals=0,
+        disabled=False
+    ),
+    # html.Button('Freeze Chart', id='freeze-button', n_clicks=0),
+    # html.Button('Resume Chart', id='resume-button', n_clicks=0)
+])
 
 
 # @app.callback(
@@ -265,27 +341,45 @@ for symbol in symbols:
 
 
 @app.callback(
+    [Output('label1', 'children'),
+     Output('label2', 'children'),
+     Output('label3', 'children'),
+     Output('label4', 'children'),
+     Output('image1', 'src'),
+     Output('image2', 'src'),
+     Output('image3', 'src'),
+     Output('image4', 'src')],
+    [Input('labels_interval', 'n_intervals')]  # Use any suitable input trigger
+)
+def update_labels(n_intervals):
+    global is_to_update_symbols
+
+    if is_to_update_symbols:
+        # Your logic to update label text dynamically
+        symbol1 = chart_contexts[0][0]
+        symbol2 = chart_contexts[1][0]
+        symbol3 = chart_contexts[2][0]
+        symbol4 = chart_contexts[3][0]
+
+        symbol1_image_path = get_coin_image_path(symbol1)
+        symbol2_image_path = get_coin_image_path(symbol2)
+        symbol3_image_path = get_coin_image_path(symbol3)
+        symbol4_image_path = get_coin_image_path(symbol4)
+
+        is_to_update_symbols = False
+
+        return symbol1, symbol2, symbol3, symbol4, symbol1_image_path, symbol2_image_path, symbol3_image_path, symbol4_image_path
+
+    return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+
+@app.callback(
     Output('candlestick-chart1', 'figure'),
     Input('interval1', 'n_intervals'),
     State('interval1', 'disabled')
 )
 def update_chart(n, interval_disabled):
     CHART_CONTEXT_INDEX = 0
-    chart_context = chart_contexts[CHART_CONTEXT_INDEX]
-
-    df = chart_context[0]
-    start_date_to_run_live_candles = chart_context[1]
-    candles_counter = chart_context[2]
-    pad_lock = chart_context[3]
-
-    pad_lock.acquire()
-
-    updated_chart = get_updated_chart(interval_disabled, df, candles_counter, start_date_to_run_live_candles)
-    chart_context[2] += 1
-
-    pad_lock.release()
-
-    return updated_chart
+    return update_chart_by_context_index(CHART_CONTEXT_INDEX, interval_disabled)
 
 
 @app.callback(
@@ -295,21 +389,27 @@ def update_chart(n, interval_disabled):
 )
 def update_chart(n, interval_disabled):
     CHART_CONTEXT_INDEX = 1
-    chart_context = chart_contexts[CHART_CONTEXT_INDEX]
+    return update_chart_by_context_index(CHART_CONTEXT_INDEX, interval_disabled)
 
-    df = chart_context[0]
-    start_date_to_run_live_candles = chart_context[1]
-    candles_counter = chart_context[2]
-    pad_lock = chart_context[3]
 
-    pad_lock.acquire()
+@app.callback(
+    Output('candlestick-chart3', 'figure'),
+    Input('interval3', 'n_intervals'),
+    State('interval3', 'disabled')
+)
+def update_chart(n, interval_disabled):
+    CHART_CONTEXT_INDEX = 2
+    return update_chart_by_context_index(CHART_CONTEXT_INDEX, interval_disabled)
 
-    updated_chart = get_updated_chart(interval_disabled, df, candles_counter, start_date_to_run_live_candles)
-    chart_context[2] += 1
 
-    pad_lock.release()
-
-    return updated_chart
+@app.callback(
+    Output('candlestick-chart4', 'figure'),
+    Input('interval4', 'n_intervals'),
+    State('interval4', 'disabled')
+)
+def update_chart(n, interval_disabled):
+    CHART_CONTEXT_INDEX = 3
+    return update_chart_by_context_index(CHART_CONTEXT_INDEX, interval_disabled)
 
 
 # Telegram BOT methods
@@ -390,4 +490,5 @@ def bot_polling():
 if __name__ == "__main__":
     bot_thread = threading.Thread(target=bot_polling)
     bot_thread.start()
+
     app.run_server(debug=False)

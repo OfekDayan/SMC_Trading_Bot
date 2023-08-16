@@ -6,7 +6,7 @@ from user_options import UserOption
 
 
 class OrderBlock:
-    def __init__(self, bottom_left: Point, top_right: Point, is_bullish: bool):
+    def __init__(self, bottom_left: Point, top_right: Point, symbol: str, is_bullish: bool):
         self.bottom_left = bottom_left
         self.top_right = top_right
         self.is_bullish = is_bullish
@@ -14,6 +14,7 @@ class OrderBlock:
         self.is_failed = False
         self.user_decision = UserOption.NONE
         self.ninty_percent_fibo_price = None
+        self.symbol = symbol
         self.id = int(self.bottom_left.datetime.timestamp())
 
     def get_top_left(self):
