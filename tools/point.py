@@ -17,6 +17,7 @@ class Point:
                 text=self.name,
                 textposition="top center",
                 line=dict(color=color),
-                marker=dict(size=marker_size)
+                marker=dict(size=marker_size),
+                textfont=dict(color=color)
             )
         )

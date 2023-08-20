@@ -3,12 +3,14 @@ import os.path
 import threading
 import ccxt
 import dash
+import numpy as np
 import pandas
 from dash import dcc, html
 from dash.dependencies import Input, Output, State
 import pandas as pd
 import plotly.graph_objects as go
 from DAL.DataAccessLayer import DatabaseManager
+from constants import TIME_FRAME
 from signal_detector import SignalDetector
 from MarketStructure.entry_zone_finder import EntryZoneFinder
 from MarketStructure.pivot_points_detector import PivotPointsDetector
@@ -34,10 +36,14 @@ BOT_ID = '5341091307:AAHGuAJDKLl3zzjIpfGhaVpW3Y3UgBNAXG4'
 bot = telebot.TeleBot(BOT_ID)
 
 # Dash app
-INTERVAL = 3000
+INTERVAL = 5000
+NUMBER_OF_CANDLES = 70
 app = dash.Dash(__name__)
 # chart_width_pixels = 800
 chart_height_pixels = 600
+
+# start_date_to_run_live_candles = datetime.datetime(2023, 6, 1)
+start_date_to_run_live_candles = datetime.datetime.today()
 
 is_to_update_symbols = True
 
@@ -51,12 +57,11 @@ def get_coin_image_path(symbol: str):
 
 
 def get_candlestick_data_frame(symbol: str) -> pandas.DataFrame:
-    TIME_FRAME = '1h'
 
     # Get the data frame from API
     exchange = ccxt.binance()
     exchange.options = {'defaultType': 'future', 'adjustForTimeDifference': True}
-    candlestick_data = exchange.fetch_ohlcv(symbol, TIME_FRAME, limit=600)
+    candlestick_data = exchange.fetch_ohlcv(symbol, TIME_FRAME, limit=NUMBER_OF_CANDLES)
 
     # Prepare data frame
     df = pd.DataFrame(candlestick_data, columns=['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
@@ -129,9 +134,9 @@ def handle_reversal_candle_on_odb(order_block: OrderBlock, last_candle: Candle, 
         db_manager.close_connection()
 
 
-def handle_existing_order_blocks(chart: go.Figure, last_candle: Candle):
+def handle_existing_order_blocks(symbol: str, chart: go.Figure, last_candle: Candle):
     db_manager = DatabaseManager(DB_FILE_NAME)
-    active_order_blocks = db_manager.get_active_order_blocks()
+    active_order_blocks = db_manager.get_active_order_blocks(symbol)
     db_manager.close_connection()
 
     if not active_order_blocks:
@@ -172,8 +177,7 @@ def get_updated_chart(interval_disabled, symbol: str, df: pandas.DataFrame, cand
         # If the interval is disabled (chart frozen), return the current figure without updating
         return dash.no_update
 
-    start_candles_index = df.index.get_loc(start_date_to_run_live_candles)
-
+    start_candles_index = df.index.get_loc(start_date_to_run_live_candles, method='nearest')
     new_index = start_candles_index + candles_counter
 
     if new_index >= len(df):
@@ -188,7 +192,6 @@ def get_updated_chart(interval_disabled, symbol: str, df: pandas.DataFrame, cand
     # Analyze
     results = get_all_order_blocks(df, symbol, chart)
 
-    # chart.update_layout(showlegend=False, xaxis_rangeslider_visible=False, width=chart_width_pixels, height=chart_height_pixels)
     chart.update_layout(showlegend=False, xaxis_rangeslider_visible=False, height=chart_height_pixels)
 
     # Check each order block
@@ -207,7 +210,7 @@ def get_updated_chart(interval_disabled, symbol: str, df: pandas.DataFrame, cand
     last_candle = Candle(new_candle_row.index[0], new_candle_row)
 
     # Handle existing order blocks
-    handle_existing_order_blocks(chart, last_candle)
+    handle_existing_order_blocks(symbol, chart, last_candle)
 
     return chart
 
@@ -231,13 +234,13 @@ def update_chart_by_context_index(context_index: int, interval_disabled: bool):
 
 chart_contexts = []
 
-symbols = ['BTCUSDT', 'ETHUSDT', 'MATICUSDT', 'BNBUSDT']
+# symbols = ['BTCUSDT', 'ETHUSDT', 'MATICUSDT', 'BNBUSDT']
+symbols = ['BNBUSDT', 'BNBUSDT', 'BNBUSDT', 'BNBUSDT']
 
 for symbol in symbols:
     candles_counter = 0
     pad_lock = threading.Lock()
     df = get_candlestick_data_frame(symbol)
-    start_date_to_run_live_candles = datetime.datetime(2023, 8, 5)
 
     chart_contexts.append([symbol, df, start_date_to_run_live_candles, candles_counter, pad_lock])
 
@@ -279,19 +282,19 @@ app.layout = html.Div([
                   'border-radius': '10px', 'box-shadow': '0 0 10px rgba(0, 0, 0, 0.1)'}),
     ], style={'display': 'flex', 'justify-content': 'center'}),
 
-    dcc.Interval(
-        id='interval1',
-        interval=1 * INTERVAL,
-        n_intervals=0,
-        disabled=False
-    ),
-
-    dcc.Interval(
-        id='interval2',
-        interval=1 * INTERVAL,
-        n_intervals=0,
-        disabled=False
-    ),
+    # dcc.Interval(
+    #     id='interval1',
+    #     interval=1 * INTERVAL,
+    #     n_intervals=0,
+    #     disabled=False
+    # ),
+    #
+    # dcc.Interval(
+    #     id='interval2',
+    #     interval=1 * INTERVAL,
+    #     n_intervals=0,
+    #     disabled=False
+    # ),
 
     dcc.Interval(
         id='interval3',
@@ -300,12 +303,12 @@ app.layout = html.Div([
         disabled=False
     ),
 
-    dcc.Interval(
-        id='interval4',
-        interval=1 * INTERVAL,
-        n_intervals=0,
-        disabled=False
-    ),
+    # dcc.Interval(
+    #     id='interval4',
+    #     interval=1 * INTERVAL,
+    #     n_intervals=0,
+    #     disabled=False
+    # ),
 
     dcc.Interval(
         id='labels_interval',

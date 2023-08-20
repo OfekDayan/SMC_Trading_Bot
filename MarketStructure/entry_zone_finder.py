@@ -42,8 +42,9 @@ class EntryZoneFinder:
             if next_pivot_point_index < len(market_structure_points):  # next pivot point exists?
                 after_pivot_point = market_structure_points[next_pivot_point_index]
 
-                # Check if there is at least 1 imbalance caused by the order block
+                # Check if there is at least 2 imbalances caused by the order block
                 active_zone_df = self.df.loc[pivot_point_starts_the_swing.datetime:after_pivot_point.datetime]
+                imbalances_counter = 0
 
                 is_imbalance_found = False
 
@@ -51,7 +52,10 @@ class EntryZoneFinder:
                     candle = Candle(index, row)
 
                     if candle.is_imbalance():
-                        is_imbalance_found = True
+                        imbalances_counter += 1
+
+                        if imbalances_counter == 2:  # 2 candles with imbalances were found
+                            is_imbalance_found = True
 
                 if not is_imbalance_found:
                     continue
@@ -101,7 +105,7 @@ class EntryZoneFinder:
         # find minor's trend pivot points
         pivot_points_detector = PivotPointsDetector(entry_zone.df)
         pivot_points_detector.find()
-        pivot_points_detector.plot_pivot_points(self.figure)
+        pivot_points_detector.plot_pivot_points(self.figure, 'gray')
 
         # find last pivot point caused the CHOCH/BOS
         if pivot_points_detector.pivot_points:

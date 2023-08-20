@@ -60,9 +60,9 @@ class PivotPointsDetector:
         self.plot_smc_levels(figure)
         self.plot_pivot_points(figure)
 
-    def plot_pivot_points(self, figure: go.Figure):
+    def plot_pivot_points(self, figure: go.Figure, color: str = 'black'):
         for point in self.pivot_points:
-            point.plot(figure, 'black')
+            point.plot(figure, color)
 
     def plot_smc_levels(self, figure: go.Figure):
         for choch_bos in self.choches_and_boses:

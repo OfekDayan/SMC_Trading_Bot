@@ -8,8 +8,6 @@ class ChartMethods:
     def __init__(self, df: pandas.DataFrame):
         self.df = df
 
-
-
     def calculate_imbalances(self, figure: go.Figure = None):
         self.df['Imbalance'] = 0
 
@@ -37,32 +35,20 @@ class ChartMethods:
                 candle = Candle(index, row)
                 candle.plot_imbalance(figure)
 
+                # TODO: remove me!
+                candle.plot_type(figure)
+
     def calculate_candles_patterns(self):
-        self.__apply_candle('Marubozu', talib.CDLMARUBOZU)
-        self.__apply_candle('Engulfing', talib.stream_CDLENGULFING)
+        patterns_to_apply = [
+            'CDLMARUBOZU', 'CDLENGULFING', 'CDLDOJI', 'CDLDOJISTAR', 'CDLDRAGONFLYDOJI',
+            'CDLGRAVESTONEDOJI', 'CDLLONGLEGGEDDOJI', 'CDLHAMMER', 'CDLINVERTEDHAMMER',
+            'CDLSPINNINGTOP', 'CDLHANGINGMAN', 'CDLSHOOTINGSTAR', 'CDLMORNINGSTAR',
+            'CDLDARKCLOUDCOVER', 'CDLEVENINGSTAR', 'CDLPIERCING'
+        ]
 
-        self.__apply_candle('Doji', talib.CDLDOJI)
-        self.__apply_candle('Doji_star', talib.stream_CDLDOJISTAR)
-        self.__apply_candle('Dragonfly_doji', talib.CDLDRAGONFLYDOJI)
-        self.__apply_candle('Gravestone_doji', talib.stream_CDLGRAVESTONEDOJI)
-        self.__apply_candle('Long_legged_doji', talib.stream_CDLLONGLEGGEDDOJI)
-
-        self.__apply_candle('Hammer', talib.CDLHAMMER)
-        self.__apply_candle('Inverted_hammer', talib.stream_CDLINVERTEDHAMMER)
-        self.__apply_candle('Spinning_top', talib.stream_CDLSPINNINGTOP)
-        self.__apply_candle('Hanging_man', talib.CDLHANGINGMAN)
-        self.__apply_candle('Shooting_star', talib.stream_CDLSHOOTINGSTAR)
-        self.__apply_candle('Morning_tar', talib.CDLMORNINGSTAR)
-        self.__apply_candle('Dark_cloud_cover', talib.CDLDARKCLOUDCOVER)
-        self.__apply_candle('Evening_star', talib.CDLEVENINGSTAR)
-        self.__apply_candle('Piercing_line', talib.CDLPIERCING)
-
-    def calculate_rsi(self):
-        pass
-
-    def calculate_rsi_divergence(self):
-        pass
+        for pattern_name in patterns_to_apply:
+            self.__apply_candle(pattern_name, getattr(talib, pattern_name))
 
     def __apply_candle(self, name: str, func):
-        self.df[name] = func(self.df['Open'], self.df['High'], self.df['Low'], self.df['Close'])
-        self.df[name] = self.df.apply(lambda x: True if x[name] == 100 or x[name] == -100 else False, axis=1)
+        pattern_results = func(self.df['Open'], self.df['High'], self.df['Low'], self.df['Close'])
+        self.df[name] = (pattern_results == 100) | (pattern_results == -100)

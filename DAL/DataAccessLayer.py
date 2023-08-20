@@ -115,10 +115,10 @@ class DatabaseManager:
 
         return order_blocks
 
-    def get_all_order_blocks(self):
+    def get_all_order_blocks(self, symbol: str):
         cursor = self.connection.cursor()
 
-        query = '''
+        query = f'''
             SELECT ob.id, 
                    ob.type, 
                    ob.isTouched, 
@@ -134,7 +134,34 @@ class DatabaseManager:
             FROM OrderBlock AS ob
             JOIN Point AS p1 ON ob.buttonLeftPointId = p1.id
             JOIN Point AS p2 ON ob.topRightPointId = p2.id
+            WHERE ob.symbol = {symbol}
         '''
+
+        cursor.execute(query)
+        db_results = cursor.fetchall()
+        return self.convert_orderblocks_results_to_list(db_results)
+
+    def get_active_order_blocks(self, symbol: str):
+        cursor = self.connection.cursor()
+
+        query = f''' 
+                   SELECT ob.id, 
+                   ob.type, 
+                   ob.isTouched, 
+                   ob.isFailed, 
+                   ob.userDecision, 
+                   ob.isTraded, 
+                   ob.nintyPercentFiboPrice,
+                   ob.symbol,
+                   p1.x AS bottom_left_x, 
+                   p1.y AS bottom_left_y, 
+                   p2.x AS top_right_x, 
+                   p2.y AS top_right_y
+                FROM OrderBlock AS ob
+                JOIN Point AS p1 ON ob.buttonLeftPointId = p1.id
+                JOIN Point AS p2 ON ob.topRightPointId = p2.id
+                WHERE ob.symbol = "{symbol}" AND ob.isTraded = 0 AND (userDecision = {UserOption.NOTIFY_PRICE_HIT_ODB.value} OR userDecision = {UserOption.NOTIFY_REVERSAL_CANDLE_FOUND.value})
+                '''
 
         cursor.execute(query)
         db_results = cursor.fetchall()
@@ -180,32 +207,6 @@ class DatabaseManager:
         cursor = self.connection.cursor()
         cursor.execute(f"UPDATE OrderBlock SET isTraded = 1 WHERE id = {order_block_id}")
         self.connection.commit()
-
-    def get_active_order_blocks(self):
-        cursor = self.connection.cursor()
-
-        query = f''' 
-                   SELECT ob.id, 
-                   ob.type, 
-                   ob.isTouched, 
-                   ob.isFailed, 
-                   ob.userDecision, 
-                   ob.isTraded, 
-                   ob.nintyPercentFiboPrice,
-                   ob.symbol,
-                   p1.x AS bottom_left_x, 
-                   p1.y AS bottom_left_y, 
-                   p2.x AS top_right_x, 
-                   p2.y AS top_right_y
-                FROM OrderBlock AS ob
-                JOIN Point AS p1 ON ob.buttonLeftPointId = p1.id
-                JOIN Point AS p2 ON ob.topRightPointId = p2.id
-                WHERE ob.isTraded = 0 AND (userDecision = {UserOption.NOTIFY_PRICE_HIT_ODB.value} OR userDecision = {UserOption.NOTIFY_REVERSAL_CANDLE_FOUND.value})
-                '''
-
-        cursor.execute(query)
-        db_results = cursor.fetchall()
-        return self.convert_orderblocks_results_to_list(db_results)
 
     def close_connection(self):
         self.connection.close()

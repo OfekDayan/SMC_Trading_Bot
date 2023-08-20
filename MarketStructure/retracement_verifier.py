@@ -22,4 +22,4 @@ class RetracementVerifier:
 
         is_valid_fibonacci_retracement = fibonacci_retracement.is_healthy_retracement(retracement.price)
 
-        return is_valid_swing and (is_valid_pullback or is_valid_fibonacci_retracement)
+        return is_valid_swing and (is_valid_pullback and is_valid_fibonacci_retracement)
