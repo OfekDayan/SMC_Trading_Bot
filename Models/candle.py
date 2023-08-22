@@ -61,6 +61,9 @@ class Candle:
             )
         )
 
+    def is_big_candle(self):
+        return self.__row['is_big_candle']
+
     def is_indecision(self):
         return self.is_doji() or self.is_doji_star() or self.is_dragonfly_doji() or self.is_gravestone_doji() or self.is_long_legged__doji() or \
                self.is_hammer() or self.is_inverted_hammer() or self.is_spinning_top() or self.is_hanging_man() or self.is_shooting_star()
@@ -82,24 +85,6 @@ class Candle:
                 self.is_bearish_engulfing() or
                 self.is_evening_star()
             )
-
-    # def is_momentum(self):
-    #     if self.is_bullish():
-    #         return (
-    #                 self.is_hammer() or
-    #                 self.is_inverted_hammer() or
-    #                 self.is_piercing_line() or
-    #                 self.is_bullish_engulfing() or
-    #                 self.is_morning_star()
-    #         )
-    #     else:
-    #         return (
-    #                 self.is_shooting_star() or
-    #                 self.is_hanging_man() or
-    #                 self.is_dark_cloud_cover() or
-    #                 self.is_bearish_engulfing() or
-    #                 self.is_evening_star()
-    #         )
 
     # Bullish Reversal Patterns
     def is_hammer(self):
@@ -149,7 +134,8 @@ class Candle:
         return self.__row['CDLLONGLEGGEDDOJI']
 
     def is_spinning_top(self):
-        return self.__row['CDLSPINNINGTOP']
+        return False
+        # return self.__row['CDLSPINNINGTOP']
 
     # Momentum
     def is_marubozu(self):

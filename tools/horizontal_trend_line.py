@@ -17,5 +17,8 @@ class HorizontalTrendLine:
         x2 = self.to_datetime
         y = self.price
 
-        figure.add_trace(go.Scatter(x=[x1, x1 + (x2 - x1) / 2.0, x2], y=[y, y, y], mode='lines+text', name=self.name,
-                                    line=dict(color=color), text=['', self.name, ''], textposition="top center"))
+        scatter = go.Scatter(x=[x1, x1 + (x2 - x1) / 2.0, x2], y=[y, y, y], mode='lines+text', name=self.name,
+                             line=dict(color=color), text=['', self.name, ''], textposition="top center")
+
+        figure.add_trace(scatter)
+        return scatter

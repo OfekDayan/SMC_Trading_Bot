@@ -36,7 +36,17 @@ class ChartMethods:
                 candle.plot_imbalance(figure)
 
                 # TODO: remove me!
-                candle.plot_type(figure)
+                # candle.plot_type(figure)
+
+    def calculate_big_candles(self):
+        self.df['body_size'] = abs(self.df['Open'] - self.df['Close'])
+        average_body_size = self.df['body_size'].mean()
+
+        # Create a new column 'condition' with True for values >= 5 * average, False otherwise
+        self.df['is_big_candle'] = self.df['body_size'] >= 5 * average_body_size
+
+        self.df = self.df.drop(columns=['body_size'])
+
 
     def calculate_candles_patterns(self):
         patterns_to_apply = [

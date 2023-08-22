@@ -27,9 +27,6 @@ class FibonacciRetracement:
 
             figure.add_trace(go.Scatter(x=[to_time], y=[price], mode='markers+text', text=f'{level}%', line=dict(color=color), textposition="top right"))
 
-        figure.update_layout(xaxis_rangeslider_visible=False)
-        figure.show()
-
     def is_healthy_retracement(self, retracement_price: float):
         retracement_level = 38.2
         return retracement_price <= self.get_level_price(retracement_level)

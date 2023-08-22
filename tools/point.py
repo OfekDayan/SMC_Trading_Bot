@@ -9,8 +9,7 @@ class Point:
         self.name = name
 
     def plot(self, figure: go.Figure, color: str, marker_size: int = 7):
-        figure.add_trace(
-            go.Scatter(
+        scatter = go.Scatter(
                 x=[self.datetime],
                 y=[self.price],
                 mode='markers+text',
@@ -20,4 +19,6 @@ class Point:
                 marker=dict(size=marker_size),
                 textfont=dict(color=color)
             )
-        )
+
+        figure.add_trace(scatter)
+        return scatter

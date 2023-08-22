@@ -45,8 +45,9 @@ class EntryZoneFinder:
                 # Check if there is at least 2 imbalances caused by the order block
                 active_zone_df = self.df.loc[pivot_point_starts_the_swing.datetime:after_pivot_point.datetime]
                 imbalances_counter = 0
+                big_candle_counter = 0
 
-                is_imbalance_found = False
+                is_valid_active_zone = False
 
                 for index, row in active_zone_df.iterrows():
                     candle = Candle(index, row)
@@ -54,10 +55,15 @@ class EntryZoneFinder:
                     if candle.is_imbalance():
                         imbalances_counter += 1
 
-                        if imbalances_counter == 2:  # 2 candles with imbalances were found
-                            is_imbalance_found = True
+                    if candle.is_big_candle():
+                        big_candle_counter += 1
 
-                if not is_imbalance_found:
+                    # 2 candles with imbalances were found & at least 1 big candle
+                    if imbalances_counter >= 2 and big_candle_counter >= 1:
+                        is_valid_active_zone = True
+                        break
+
+                if not is_valid_active_zone:
                     continue
 
                 # check if order block is touched

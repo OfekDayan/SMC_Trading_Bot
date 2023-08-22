@@ -36,8 +36,8 @@ BOT_ID = '5341091307:AAHGuAJDKLl3zzjIpfGhaVpW3Y3UgBNAXG4'
 bot = telebot.TeleBot(BOT_ID)
 
 # Dash app
-INTERVAL = 5000
-NUMBER_OF_CANDLES = 70
+INTERVAL = 2000
+NUMBER_OF_CANDLES = 200
 app = dash.Dash(__name__)
 # chart_width_pixels = 800
 chart_height_pixels = 600
@@ -78,14 +78,15 @@ def get_all_order_blocks(df: pandas.DataFrame, symbol: str, chart: go.Figure) ->
     # For all candles, checks candle type & calculates its imbalance value
     chart_methods = ChartMethods(df)
     chart_methods.calculate_candles_patterns()
-    chart_methods.calculate_imbalances(chart)
+    chart_methods.calculate_imbalances()
+    chart_methods.calculate_big_candles()
 
     # Find pivot points and SMC levels
     pivot_points_detector = PivotPointsDetector(df)
     pivot_points_detector.find()
 
-    pivot_points_detector.plot_smc_levels(chart)
-    pivot_points_detector.plot_pivot_points(chart)
+    pivot_points_detector.plot_smc_levels()
+    pivot_points_detector.plot_pivot_points()
 
     choches_and_boses = pivot_points_detector.choches_and_boses
     pivot_points = pivot_points_detector.pivot_points
@@ -232,6 +233,26 @@ def update_chart_by_context_index(context_index: int, interval_disabled: bool):
     return updated_chart
 
 
+
+# ///////////////////////////////////////
+# Pivot points simulator
+
+df = get_candlestick_data_frame('MATICUSDT')
+chart_methods = ChartMethods(df)
+chart_methods.calculate_candles_patterns()
+chart_methods.calculate_imbalances()
+chart_methods.calculate_big_candles()
+
+# Find pivot points and SMC levels
+pivot_points_detector = PivotPointsDetector(df)
+pivot_points_detector.find()
+pivot_points_detector.create_animation("animation.avi")
+
+
+# ///////////////////////////////////////
+
+
+
 chart_contexts = []
 
 # symbols = ['BTCUSDT', 'ETHUSDT', 'MATICUSDT', 'BNBUSDT']
@@ -281,7 +302,7 @@ app.layout = html.Div([
         ], style={'flex': '1', 'margin': '10px', 'padding': '20px', 'background-color': '#f5f5f5',
                   'border-radius': '10px', 'box-shadow': '0 0 10px rgba(0, 0, 0, 0.1)'}),
     ], style={'display': 'flex', 'justify-content': 'center'}),
-
+    #
     # dcc.Interval(
     #     id='interval1',
     #     interval=1 * INTERVAL,
