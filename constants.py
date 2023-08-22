@@ -1,3 +1,3 @@
 
-TIME_FRAME = '5m'
+TIME_FRAME = '1d'
 

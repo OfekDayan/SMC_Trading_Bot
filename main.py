@@ -37,13 +37,15 @@ bot = telebot.TeleBot(BOT_ID)
 
 # Dash app
 INTERVAL = 2000
-NUMBER_OF_CANDLES = 200
+NUMBER_OF_CANDLES = 500
 app = dash.Dash(__name__)
 # chart_width_pixels = 800
 chart_height_pixels = 600
 
 # start_date_to_run_live_candles = datetime.datetime(2023, 6, 1)
 start_date_to_run_live_candles = datetime.datetime.today()
+
+PIVOT_POINTS_SIMULATOR = False
 
 is_to_update_symbols = True
 
@@ -78,15 +80,15 @@ def get_all_order_blocks(df: pandas.DataFrame, symbol: str, chart: go.Figure) ->
     # For all candles, checks candle type & calculates its imbalance value
     chart_methods = ChartMethods(df)
     chart_methods.calculate_candles_patterns()
-    chart_methods.calculate_imbalances()
+    chart_methods.calculate_imbalances(chart)
     chart_methods.calculate_big_candles()
 
     # Find pivot points and SMC levels
     pivot_points_detector = PivotPointsDetector(df)
     pivot_points_detector.find()
 
-    pivot_points_detector.plot_smc_levels()
-    pivot_points_detector.plot_pivot_points()
+    pivot_points_detector.plot_smc_levels(chart)
+    pivot_points_detector.plot_pivot_points(chart)
 
     choches_and_boses = pivot_points_detector.choches_and_boses
     pivot_points = pivot_points_detector.pivot_points
@@ -233,30 +235,26 @@ def update_chart_by_context_index(context_index: int, interval_disabled: bool):
     return updated_chart
 
 
+def pivot_points_simulator(symbol: str):
+    df = get_candlestick_data_frame(symbol)
+    chart_methods = ChartMethods(df)
+    chart_methods.calculate_candles_patterns()
+    chart_methods.calculate_imbalances()
+    chart_methods.calculate_big_candles()
 
-# ///////////////////////////////////////
-# Pivot points simulator
-
-df = get_candlestick_data_frame('MATICUSDT')
-chart_methods = ChartMethods(df)
-chart_methods.calculate_candles_patterns()
-chart_methods.calculate_imbalances()
-chart_methods.calculate_big_candles()
-
-# Find pivot points and SMC levels
-pivot_points_detector = PivotPointsDetector(df)
-pivot_points_detector.find()
-pivot_points_detector.create_animation("animation.avi")
+    # Find pivot points and SMC levels
+    pivot_points_detector = PivotPointsDetector(df, True)
+    pivot_points_detector.find()
+    pivot_points_detector.create_animation("animation.avi")
 
 
-# ///////////////////////////////////////
-
-
+if PIVOT_POINTS_SIMULATOR:
+    pivot_points_simulator('MATICUSDT')
+    exit(0)
 
 chart_contexts = []
 
-# symbols = ['BTCUSDT', 'ETHUSDT', 'MATICUSDT', 'BNBUSDT']
-symbols = ['BNBUSDT', 'BNBUSDT', 'BNBUSDT', 'BNBUSDT']
+symbols = ['BTCUSDT', 'ETHUSDT', 'MATICUSDT', 'BNBUSDT']
 
 for symbol in symbols:
     candles_counter = 0
@@ -302,20 +300,20 @@ app.layout = html.Div([
         ], style={'flex': '1', 'margin': '10px', 'padding': '20px', 'background-color': '#f5f5f5',
                   'border-radius': '10px', 'box-shadow': '0 0 10px rgba(0, 0, 0, 0.1)'}),
     ], style={'display': 'flex', 'justify-content': 'center'}),
-    #
-    # dcc.Interval(
-    #     id='interval1',
-    #     interval=1 * INTERVAL,
-    #     n_intervals=0,
-    #     disabled=False
-    # ),
-    #
-    # dcc.Interval(
-    #     id='interval2',
-    #     interval=1 * INTERVAL,
-    #     n_intervals=0,
-    #     disabled=False
-    # ),
+
+    dcc.Interval(
+        id='interval1',
+        interval=1 * INTERVAL,
+        n_intervals=0,
+        disabled=False
+    ),
+
+    dcc.Interval(
+        id='interval2',
+        interval=1 * INTERVAL,
+        n_intervals=0,
+        disabled=False
+    ),
 
     dcc.Interval(
         id='interval3',
@@ -324,12 +322,12 @@ app.layout = html.Div([
         disabled=False
     ),
 
-    # dcc.Interval(
-    #     id='interval4',
-    #     interval=1 * INTERVAL,
-    #     n_intervals=0,
-    #     disabled=False
-    # ),
+    dcc.Interval(
+        id='interval4',
+        interval=1 * INTERVAL,
+        n_intervals=0,
+        disabled=False
+    ),
 
     dcc.Interval(
         id='labels_interval',

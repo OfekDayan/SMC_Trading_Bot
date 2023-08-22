@@ -10,12 +10,11 @@ from tools.point import Point
 import os
 import cv2
 
-animation_index = 0
 IMAGES_FOLDER = "pivot_points_animation"
 
 
 class PivotPointsDetector:
-    def __init__(self, df: pd.DataFrame, figure: go.Figure = None):
+    def __init__(self, df: pd.DataFrame, is_animation_mode: bool = False):
         self.df = df
         self.temp_df = df.copy()  # Create a copy of the original DataFrame
         self.__trend = None
@@ -27,10 +26,12 @@ class PivotPointsDetector:
         self.dynamic_high = None
         self.choches_and_boses = []
         self.pivot_points = []
-        # self.figure = figure
-        self.figure = go.Figure(data=[go.Candlestick(x=self.df.index, open=self.df['Open'], high=self.df['High'], low=self.df['Low'], close=self.df['Close'])])
-        self.delete_and_create_folder(IMAGES_FOLDER)
+        self.animation_chart = None
+        self.animation_index = 0
 
+        if is_animation_mode:
+            self.delete_and_create_folder(IMAGES_FOLDER)
+            self.animation_chart = go.Figure(data=[go.Candlestick(x=self.df.index, open=self.df['Open'], high=self.df['High'], low=self.df['Low'], close=self.df['Close'])])
 
     def __find_trend(self):
         max_high_value = self.temp_df['High'].idxmax()
@@ -44,7 +45,7 @@ class PivotPointsDetector:
             self.high = Point(first_row.name, first_row['High'])
             self.dynamic_low = Point(first_row.name, first_row['Low'])
 
-            self.pivot_points.append(Point(self.high.datetime, self.high.price, 'High'))
+            self.pivot_points.append(Point(self.high.datetime, self.high.price, ''))
 
         else:
             self.__trend = 'uptrend'
@@ -54,7 +55,7 @@ class PivotPointsDetector:
             self.low = Point(first_row.name, first_row['Low'])
             self.dynamic_high = Point(first_row.name, first_row['High'])
 
-            self.pivot_points.append(Point(self.low.datetime, self.low.price, 'Low'))
+            self.pivot_points.append(Point(self.low.datetime, self.low.price, ''))
 
     def find(self):
         self.__find_trend()
@@ -66,18 +67,14 @@ class PivotPointsDetector:
             else:
                 self.uptrend()
 
-    def add_to_chart(self):
-        self.plot_smc_levels()
-        self.plot_pivot_points()
-
-    def plot_pivot_points(self, color: str = 'black'):
+    def plot_pivot_points(self, figure: go.Figure, color: str = 'black'):
         for point in self.pivot_points:
-            point.plot(self.figure, color)
+            point.plot(figure, color)
 
-    def plot_smc_levels(self):
+    def plot_smc_levels(self, figure: go.Figure):
         for choch_bos in self.choches_and_boses:
             color = 'red' if choch_bos.name == 'CHoCH' else 'blue'
-            choch_bos.plot(self.figure, color)
+            choch_bos.plot(figure, color)
 
     def uptrend(self):
         for index, row in self.temp_df[self.current_candle_index:].iterrows():
@@ -97,9 +94,9 @@ class PivotPointsDetector:
                     return
 
                 # HL found
-                if candle.close_price > self.high.price:
-                    self.choches_and_boses.append(
-                        HorizontalTrendLine('BOS', self.high.datetime, candle.time, self.high.price))
+                if candle.high_price > self.high.price:
+                    if candle.close_price > self.high.price:
+                        self.choches_and_boses.append(HorizontalTrendLine('BOS', self.high.datetime, candle.time, self.high.price))
 
                     self.low = Point(self.dynamic_low.datetime, self.dynamic_low.price)
                     self.pivot_points.append(Point(self.low.datetime, self.low.price, 'HL'))
@@ -129,9 +126,9 @@ class PivotPointsDetector:
                     self.high = Point(self.dynamic_high.datetime, self.dynamic_high.price)
                     self.pivot_points.append(Point(self.high.datetime, self.high.price, 'HH'))
 
-                    if self.figure is not None:
+                    if self.animation_chart is not None:
                         fibonacci_retracement = FibonacciRetracement(swing_start, swing_end)
-                        fibonacci_retracement.plot(self.figure, swing_end.datetime)
+                        fibonacci_retracement.plot(self.animation_chart, swing_end.datetime)
 
     def downtrend(self):
         for index, row in self.temp_df[self.current_candle_index:].iterrows():
@@ -151,9 +148,9 @@ class PivotPointsDetector:
                     return
 
                 # LH found
-                if candle.close_price < self.low.price:
-                    self.choches_and_boses.append(
-                        HorizontalTrendLine('BOS', self.low.datetime, candle.time, self.low.price))
+                if candle.low_price < self.low.price:
+                    if candle.close_price < self.low.price:
+                        self.choches_and_boses.append(HorizontalTrendLine('BOS', self.low.datetime, candle.time, self.low.price))
 
                     self.high = Point(self.dynamic_high.datetime, self.dynamic_high.price)
                     self.pivot_points.append(Point(self.high.datetime, self.high.price, 'LH'))
@@ -184,36 +181,38 @@ class PivotPointsDetector:
                     self.low = Point(self.dynamic_low.datetime, self.dynamic_low.price)
                     self.pivot_points.append(Point(self.low.datetime, self.low.price, 'LL'))
 
-                    if self.figure is not None:
+                    if self.animation_chart is not None:
                         fibonacci_retracement = FibonacciRetracement(swing_start, swing_end)
-                        fibonacci_retracement.plot(self.figure, swing_end.datetime)
+                        fibonacci_retracement.plot(self.animation_chart, swing_end.datetime)
 
     def show_points(self):
-        if self.figure is None:
+        if self.animation_chart is None:
             return
 
         if self.dynamic_high:
-            self.dynamic_high.plot(self.figure, 'green', 10)
+            self.dynamic_high.plot(self.animation_chart, 'green', 10)
 
         if self.dynamic_low:
-            self.dynamic_low.plot(self.figure, 'red', 10)
+            self.dynamic_low.plot(self.animation_chart, 'red', 10)
 
         if self.high:
-            self.high.plot(self.figure, 'gray', 10)
+            self.high.plot(self.animation_chart, 'gray', 10)
 
         if self.low:
-            self.low.plot(self.figure, 'gray', 10)
+            self.low.plot(self.animation_chart, 'gray', 10)
 
-        self.plot_pivot_points()
+        # Add pivot points and smc levels
+        self.plot_pivot_points(self.animation_chart)
+        self.plot_smc_levels(self.animation_chart)
 
-        self.figure.update_layout(showlegend=False, xaxis_rangeslider_visible=False)
+        self.animation_chart.update_layout(showlegend=False, xaxis_rangeslider_visible=False)
 
-        global animation_index
-        self.figure.write_image(f'{IMAGES_FOLDER}/{animation_index}.png', format='png')
-        animation_index += 1
+        # Write image to file
+        self.animation_chart.write_image(f'{IMAGES_FOLDER}/{self.animation_index}.png', format='png')
+        self.animation_index += 1
 
-        # self.figure.show()
-        self.figure = go.Figure(data=[go.Candlestick(x=self.df.index, open=self.df['Open'], high=self.df['High'], low=self.df['Low'], close=self.df['Close'])])
+        # Create new chart
+        self.animation_chart = go.Figure(data=[go.Candlestick(x=self.df.index, open=self.df['Open'], high=self.df['High'], low=self.df['Low'], close=self.df['Close'])])
 
     def create_animation(self, output_video_path):
         images = [img for img in os.listdir(IMAGES_FOLDER) if img.endswith(".png")]
