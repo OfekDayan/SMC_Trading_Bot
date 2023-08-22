@@ -17,6 +17,21 @@ def is_n_non_indecision_candles(df: pandas.DataFrame, n: int, is_bullish: bool =
     return False
 
 
+def is_n_non_reversal_candles(df: pandas.DataFrame, n: int, is_bullish: bool = True):
+    valid_candles = 0
+
+    for index, row in df.iterrows():
+        candle = Candle(index, row)
+
+        if (is_bullish and candle.is_bullish()) or (not is_bullish and candle.is_bearish()) and not candle.is_reversal():
+            valid_candles += 1
+
+            if valid_candles == n:
+                return True
+
+    return False
+
+
 def is_n_consecutive_non_indecision_candles(df: pandas.DataFrame, n: int, is_bullish: bool = True):
     valid_candles = 0
 

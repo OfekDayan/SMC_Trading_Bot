@@ -1,5 +1,5 @@
 import pandas
-from MarketStructure.candles_counter import is_n_non_indecision_candles, is_n_candles
+from MarketStructure.candles_counter import is_n_non_indecision_candles, is_n_candles, is_n_non_reversal_candles
 from tools.fibonacci_retracement import FibonacciRetracement
 from tools.point import Point
 
@@ -17,12 +17,14 @@ class RetracementVerifier:
 
         is_bullish_swing = swing_end.price > swing_start.price
 
-        # is_valid_swing = is_n_non_indecision_candles(swing_df, 2) and is_n_candles(swing_df, 2, is_bullish_swing)
-        # is_valid_pullback = is_n_non_indecision_candles(pullback_df, 2) and is_n_candles(pullback_df, 2, not is_bullish_swing)
+        is_valid_swing = is_n_non_indecision_candles(swing_df, 1) and \
+                         is_n_non_reversal_candles(swing_df, 1) and \
+                         is_n_candles(swing_df, 3, is_bullish_swing)
 
-        is_valid_swing = is_n_candles(swing_df, 2, is_bullish_swing)
-        is_valid_pullback = is_n_candles(pullback_df, 2, not is_bullish_swing)
+        is_valid_pullback = is_n_non_indecision_candles(pullback_df, 1) and \
+                            is_n_non_reversal_candles(pullback_df, 1) and \
+                            is_n_candles(pullback_df, 3, not is_bullish_swing)
 
         is_valid_fibonacci_retracement = fibonacci_retracement.is_healthy_retracement(retracement.price)
 
-        return is_valid_swing and (is_valid_pullback and is_valid_fibonacci_retracement)
+        return is_valid_swing and (is_valid_pullback or (is_valid_fibonacci_retracement and is_n_candles(pullback_df, 2, not is_bullish_swing)))
