@@ -2,7 +2,7 @@ import pandas
 import plotly.graph_objects as go
 from Models.candle import Candle
 from tools.fibonacci_retracement import FibonacciRetracement
-from tools.order_block import OrderBlock
+from tools.order_block import OrderBlock, OrderBlockStatus
 from tools.point import Point
 
 
@@ -43,7 +43,7 @@ class SignalDetector:
 
             if (self.order_block.is_bullish and candle.low_price <= price_to_send_signal) or \
                     (not self.order_block.is_bullish and candle.high_price >= price_to_send_signal):
-                signal_point = Point(candle_time, price_to_send_signal)
+                signal_point = Point(candle.time, price_to_send_signal)
                 return signal_point
 
         return None
@@ -54,12 +54,11 @@ class SignalDetector:
         if signal_point is None:
             return False
 
-        if chart:
-            signal_point.plot(chart, 'Blue', 10)
-
-        if self.order_block.is_failed or self.order_block.is_touched:
-            return False
-
         # Get the last candle
         last_candle_datetime = self.pullback_zone_df.index[-1]
-        return signal_point.datetime == last_candle_datetime
+        is_to_send_signal = signal_point.datetime == last_candle_datetime
+
+        if chart:
+            signal_point.plot(chart, 'Orange', 10)
+
+        return is_to_send_signal

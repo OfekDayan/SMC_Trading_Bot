@@ -1,7 +1,7 @@
 from datetime import timedelta
 import plotly.graph_objects as go
 
-from constants import TIME_FRAME
+from constants import Constants
 from tools.horizontal_trend_line import HorizontalTrendLine
 
 
@@ -24,20 +24,13 @@ class Candle:
         return abs(self.open_price - self.close_price)
 
     def is_imbalance(self) -> bool:
-        if self.__row['Imbalance'] == 0:
-            return False
-
-        body_size = self.body_size()
-        imbalance_body_ratio = self.__row['Imbalance'] / body_size
-
-        # return imbalance_body_ratio >= 0.3
-        return True
+        return self.__row['Imbalance'] != 0
 
     def plot_imbalance(self, figure: go.Figure):
         if not self.is_imbalance():
             return
 
-        single_candle_timedelta = self.__parse_timedelta(TIME_FRAME)
+        single_candle_timedelta = self.__parse_timedelta(Constants.time_frame)
         from_time = self.time - single_candle_timedelta
         to_time = self.time + single_candle_timedelta
         imbalance_start = self.__row['Imbalance_Start']

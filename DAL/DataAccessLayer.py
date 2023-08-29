@@ -2,7 +2,7 @@ import os
 import sqlite3
 import pandas as pd
 
-from tools.order_block import OrderBlock
+from tools.order_block import OrderBlock, OrderBlockStatus
 from tools.point import Point
 from user_options import UserOption
 
@@ -39,10 +39,8 @@ class DatabaseManager:
                 buttonLeftPointId INTEGER,
                 topRightPointId INTEGER,
                 type TEXT,
-                isTouched INTEGER,
-                isFailed INTEGER,
+                status INTEGER,
                 userDecision INTEGER,
-                isTraded INTEGER,
                 pollId INTEGER,
                 nintyPercentFiboPrice FLOAT,
                 symbol TEXT,
@@ -74,17 +72,15 @@ class DatabaseManager:
         order_block_type = "bullish" if order_block.is_bullish else "bearish"
 
         cursor.execute('''
-            INSERT INTO OrderBlock (id, buttonLeftPointId, topRightPointId, type, isTouched, isFailed, userDecision, isTraded, pollId, nintyPercentFiboPrice, symbol)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO OrderBlock (id, buttonLeftPointId, topRightPointId, type, status, userDecision, pollId, nintyPercentFiboPrice, symbol)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             order_block.id,
             bottom_left_point_id,
             top_right_point_id,
             order_block_type,
-            int(order_block.is_touched),
-            int(order_block.is_failed),
-            0,
-            0,
+            order_block.order_block_status.value,
+            0, # userDecision
             poll_id,
             order_block.ninty_percent_fibo_price,
             order_block.symbol
@@ -98,19 +94,19 @@ class DatabaseManager:
 
         for row in db_results:
             # Convert bottom_left_x
-            bottom_left_x_as_timestamp = pd.Timestamp(row[7])
-            bottom_left = Point(date_time=bottom_left_x_as_timestamp, price=row[8])
+            bottom_left_x_as_timestamp = pd.Timestamp(row[6])
+            bottom_left = Point(date_time=bottom_left_x_as_timestamp, price=row[7])
 
             # Convert bottom_left_x
-            top_right_x_as_timestamp = pd.Timestamp(row[9])
-            top_right = Point(date_time=top_right_x_as_timestamp, price=row[10])
+            top_right_x_as_timestamp = pd.Timestamp(row[8])
+            top_right = Point(date_time=top_right_x_as_timestamp, price=row[9])
 
-            order_block = OrderBlock(bottom_left, top_right, row[1] == 'bullish')
-            order_block.is_touched = bool(row[2])
-            order_block.is_failed = bool(row[3])
-            order_block.user_decision = row[4]
-            order_block.ninty_percent_fibo_price = row[6]
-            order_blocks.symbol = row[7]
+            symbol = row[5]
+
+            order_block = OrderBlock(bottom_left, top_right, symbol, row[1] == 'bullish')
+            order_block.order_block_status = row[2]
+            order_block.user_decision = row[3]
+            order_block.ninty_percent_fibo_price = row[4]
             order_blocks.append(order_block)
 
         return order_blocks
@@ -121,10 +117,8 @@ class DatabaseManager:
         query = f'''
             SELECT ob.id, 
                    ob.type, 
-                   ob.isTouched, 
-                   ob.isFailed, 
+                   ob.status, 
                    ob.userDecision, 
-                   ob.isTraded, 
                    ob.nintyPercentFiboPrice,
                    ob.symbol,
                    p1.x AS bottom_left_x, 
@@ -145,23 +139,22 @@ class DatabaseManager:
         cursor = self.connection.cursor()
 
         query = f''' 
-                   SELECT ob.id, 
-                   ob.type, 
-                   ob.isTouched, 
-                   ob.isFailed, 
-                   ob.userDecision, 
-                   ob.isTraded, 
-                   ob.nintyPercentFiboPrice,
-                   ob.symbol,
-                   p1.x AS bottom_left_x, 
-                   p1.y AS bottom_left_y, 
-                   p2.x AS top_right_x, 
-                   p2.y AS top_right_y
-                FROM OrderBlock AS ob
-                JOIN Point AS p1 ON ob.buttonLeftPointId = p1.id
-                JOIN Point AS p2 ON ob.topRightPointId = p2.id
-                WHERE ob.symbol = "{symbol}" AND ob.isTraded = 0 AND (userDecision = {UserOption.NOTIFY_PRICE_HIT_ODB.value} OR userDecision = {UserOption.NOTIFY_REVERSAL_CANDLE_FOUND.value})
-                '''
+            SELECT ob.id, 
+            ob.type, 
+            ob.status, 
+            ob.userDecision, 
+            ob.nintyPercentFiboPrice,
+            ob.symbol,
+            p1.x AS bottom_left_x, 
+            p1.y AS bottom_left_y, 
+            p2.x AS top_right_x, 
+            p2.y AS top_right_y
+            FROM OrderBlock AS ob
+            JOIN Point AS p1 ON ob.buttonLeftPointId = p1.id
+            JOIN Point AS p2 ON ob.topRightPointId = p2.id
+            WHERE ob.symbol = "{symbol}" AND ob.status = {OrderBlockStatus.UNKNOWN.value} AND
+            (ob.userDecision = {UserOption.NOTIFY_PRICE_HIT_ODB.value} OR ob.userDecision = {UserOption.NOTIFY_REVERSAL_CANDLE_FOUND.value})
+        '''
 
         cursor.execute(query)
         db_results = cursor.fetchall()
@@ -173,10 +166,8 @@ class DatabaseManager:
         query = f'''
             SELECT ob.id, 
                    ob.type, 
-                   ob.isTouched, 
-                   ob.isFailed, 
+                   ob.status, 
                    ob.userDecision, 
-                   ob.isTraded, 
                    ob.nintyPercentFiboPrice,
                    ob.symbol,
                    p1.x AS bottom_left_x, 
@@ -193,6 +184,11 @@ class DatabaseManager:
         db_results = cursor.fetchall()
         return self.convert_orderblocks_results_to_list(db_results)[0]
 
+    def update_status(self, order_block_id, status: OrderBlockStatus):
+        cursor = self.connection.cursor()
+        cursor.execute("UPDATE OrderBlock SET status = ? WHERE id = ?", (status.value, order_block_id))
+        self.connection.commit()
+
     def update_user_decision(self, order_block_id, user_option: UserOption):
         cursor = self.connection.cursor()
         cursor.execute("UPDATE OrderBlock SET userDecision = ? WHERE id = ?", (user_option.value, order_block_id))
@@ -201,11 +197,6 @@ class DatabaseManager:
     def update_poll_id(self, order_block_id, poll_id):
         cursor = self.connection.cursor()
         cursor.execute("UPDATE OrderBlock SET pollId = ? WHERE id = ?", (poll_id, order_block_id))
-        self.connection.commit()
-
-    def set_order_block_as_traded(self, order_block_id):
-        cursor = self.connection.cursor()
-        cursor.execute(f"UPDATE OrderBlock SET isTraded = 1 WHERE id = {order_block_id}")
         self.connection.commit()
 
     def close_connection(self):

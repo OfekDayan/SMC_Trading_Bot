@@ -3,21 +3,21 @@ import os.path
 import threading
 import ccxt
 import dash
-import numpy as np
 import pandas
 from dash import dcc, html
 from dash.dependencies import Input, Output, State
 import pandas as pd
 import plotly.graph_objects as go
+import webbrowser
 from DAL.DataAccessLayer import DatabaseManager
-from constants import TIME_FRAME
+from constants import Constants
 from signal_detector import SignalDetector
 from MarketStructure.entry_zone_finder import EntryZoneFinder
 from MarketStructure.pivot_points_detector import PivotPointsDetector
 from Models.candle import Candle
 from smc.chart_methods import ChartMethods
 import telebot
-from tools.order_block import OrderBlock
+from tools.order_block import OrderBlock, OrderBlockStatus
 from user_options import UserOption
 from PIL import Image
 
@@ -28,7 +28,15 @@ user_option_and_text = [
     (UserOption.NOTIFY_REVERSAL_CANDLE_FOUND, 'Notify me if a reversal candle is found on Order Block')
     ]
 
+chart_contexts = []
+symbols = []
+
+optional_timeframes = ['1m', '5m', '15m', '30m', '1h', '1d']
+optional_coins = ['BTC', 'ETH', 'MATIC', 'SAND', 'LTC', 'BNB', 'SOL', 'ADA', 'DOT', 'DOGE']
+
 DB_FILE_NAME = "SmcTradingBotDB.db"
+
+user_answer_poll_event = threading.Event()
 
 # Telegram members
 chat_id = 1451941685
@@ -36,17 +44,16 @@ BOT_ID = '5341091307:AAHGuAJDKLl3zzjIpfGhaVpW3Y3UgBNAXG4'
 bot = telebot.TeleBot(BOT_ID)
 
 # Dash app
-INTERVAL = 2000
-NUMBER_OF_CANDLES = 500
+INTERVAL = 3000
+NUMBER_OF_CANDLES = 400
 app = dash.Dash(__name__)
 # chart_width_pixels = 800
-chart_height_pixels = 600
+chart_height_pixels = 1200
 
-# start_date_to_run_live_candles = datetime.datetime(2023, 6, 1)
-start_date_to_run_live_candles = datetime.datetime.today()
+start_date_to_run_live_candles = datetime.datetime(2023, 8, 25 ,1)
+# start_date_to_run_live_candles = datetime.datetime.today()
 
 PIVOT_POINTS_SIMULATOR = False
-
 is_to_update_symbols = True
 
 
@@ -63,7 +70,7 @@ def get_candlestick_data_frame(symbol: str) -> pandas.DataFrame:
     # Get the data frame from API
     exchange = ccxt.binance()
     exchange.options = {'defaultType': 'future', 'adjustForTimeDifference': True}
-    candlestick_data = exchange.fetch_ohlcv(symbol, TIME_FRAME, limit=NUMBER_OF_CANDLES)
+    candlestick_data = exchange.fetch_ohlcv(symbol, Constants.time_frame, limit=NUMBER_OF_CANDLES)
 
     # Prepare data frame
     df = pd.DataFrame(candlestick_data, columns=['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
@@ -155,12 +162,29 @@ def handle_existing_order_blocks(symbol: str, chart: go.Figure, last_candle: Can
                 handle_reversal_candle_on_odb(active_order_block, last_candle, chart)
 
 
+def freeze_symbol_updating(symbol: str):
+    for chart_context in chart_contexts:
+        if chart_context[0] == symbol:
+            chart_context[5] = False
+            break
+
+
+def resume_symbol_updating(symbol: str):
+    for chart_context in chart_contexts:
+        if chart_context[0] == symbol:
+            chart_context[5] = True
+            break
+
+
 def handle_new_order_blocks(order_block: OrderBlock, pullback_zone_df: pandas.DataFrame, chart: go.Figure):
     # Signals finder
     signal_detector = SignalDetector(order_block, pullback_zone_df)
     is_to_send_signal = signal_detector.is_last_candle_reached_signal_price(chart)
 
     if is_to_send_signal:
+        # Freeze updating
+        freeze_symbol_updating(order_block.symbol)
+
         # Send notification to user
         image_path = "chart.jpg"
         chart.write_image(image_path, scale=4)
@@ -175,8 +199,8 @@ def handle_new_order_blocks(order_block: OrderBlock, pullback_zone_df: pandas.Da
         db_manager.close_connection()
 
 
-def get_updated_chart(interval_disabled, symbol: str, df: pandas.DataFrame, candles_counter: int, start_date_to_run_live_candles) -> go.Figure:
-    if interval_disabled:
+def get_updated_chart(interval_disabled, symbol: str, df: pandas.DataFrame, candles_counter: int, start_date_to_run_live_candles, is_to_run) -> go.Figure:
+    if interval_disabled or not is_to_run:
         # If the interval is disabled (chart frozen), return the current figure without updating
         return dash.no_update
 
@@ -226,9 +250,10 @@ def update_chart_by_context_index(context_index: int, interval_disabled: bool):
     start_date_to_run_live_candles = chart_context[2]
     candles_counter = chart_context[3]
     pad_lock = chart_context[4]
+    is_to_run = chart_context[5]
 
     pad_lock.acquire()
-    updated_chart = get_updated_chart(interval_disabled, symbol, df, candles_counter, start_date_to_run_live_candles)
+    updated_chart = get_updated_chart(interval_disabled, symbol, df, candles_counter, start_date_to_run_live_candles, is_to_run)
     chart_context[3] += 1
     pad_lock.release()
 
@@ -252,16 +277,108 @@ if PIVOT_POINTS_SIMULATOR:
     pivot_points_simulator('MATICUSDT')
     exit(0)
 
-chart_contexts = []
 
-symbols = ['BTCUSDT', 'ETHUSDT', 'MATICUSDT', 'BNBUSDT']
+# Telegram BOT methods
+def send_poll(question: str, options: list[str]):
+    global chat_id
+    return bot.send_poll(chat_id, question, options, is_anonymous=False)
 
-for symbol in symbols:
-    candles_counter = 0
-    pad_lock = threading.Lock()
-    df = get_candlestick_data_frame(symbol)
 
-    chart_contexts.append([symbol, df, start_date_to_run_live_candles, candles_counter, pad_lock])
+def send_poll_multiple_answers(question: str, options: list[str]):
+    global chat_id
+    return bot.send_poll(chat_id, question, options, allows_multiple_answers=True, is_anonymous=False)
+
+
+def send_image(image_path: str, caption: str = None):
+    global chat_id
+
+    with open(image_path, 'rb') as image_file:
+        bot.send_photo(chat_id, image_file, caption)
+
+
+def send_signal(image_path: str):
+    # Send the image
+    send_image(image_path, "")
+
+    # Send options poll
+    options = [item[1] for item in user_option_and_text]
+    return send_poll("what should I do?", options).poll.id
+
+
+def send_second_signal(image_path: str, message: str):
+    # Send the image
+    send_image(image_path, "")
+
+    # Send options poll - TRADE / IGNORE
+    options = [user_option_and_text[0][1], user_option_and_text[1][1]]
+    return send_poll(message, options).poll.id
+
+
+def send_price_hit_odb_signal(image_path: str):
+    MESSAGE_TO_SEND = "I'm notifying you that the price hit's the order block - what should I do?"
+    return send_second_signal(image_path, MESSAGE_TO_SEND)
+
+
+def send_reversal_candle_found_on_odb_signal(image_path: str, candle_type):
+    MESSAGE_TO_SEND = f"I'm notifying you that the I found a reversal candle ({candle_type}) on the order block - what should I do?"
+    return send_second_signal(image_path, MESSAGE_TO_SEND)
+
+
+@bot.poll_answer_handler()
+def handle_poll_answer(pollAnswer):
+    poll_id = pollAnswer.poll_id
+
+    # Coins selection poll
+    if poll_id == coins_selection_poll_id:
+        for i in pollAnswer.option_ids:
+            coin = optional_coins[i]
+            symbols.append(f'{coin.upper()}USDT')
+
+        # Signal the main thread that the user selected coins
+        user_answer_poll_event.set()
+        return
+
+    # Timeframe selection poll
+    if poll_id == timeframe_selection_poll_id:
+        index = pollAnswer.option_ids[0]
+        Constants.time_frame = optional_timeframes[index]
+        # Signal the main thread that the user selected timeframe
+        user_answer_poll_event.set()
+        return
+
+    # Get related order block
+    db_manager = DatabaseManager(DB_FILE_NAME)
+    related_order_block = db_manager.get_order_block_by_poll_id(poll_id)
+
+    # Get selected option
+    selected_option_index = pollAnswer.option_ids[0]
+    user_decision = user_option_and_text[selected_option_index][0]
+
+    # Update order block's user decision in DB
+    db_manager.update_user_decision(related_order_block.id, user_decision)
+    db_manager.close_connection()
+
+    # Handle TRADE response
+    if user_decision == UserOption.TRADE:
+        # TODO: take the trade - market - ccxt
+
+        # Update order block in DB to be considered as traded
+        db_manager = DatabaseManager(DB_FILE_NAME)
+        db_manager.update_status(related_order_block.id, OrderBlockStatus.TRADING)
+        db_manager.close_connection()
+
+    # Resume symbol updating
+    resume_symbol_updating(related_order_block.symbol)
+
+
+def bot_polling():
+    bot.polling()
+    pass
+
+
+# @bot.message_handler()
+# def start(message):
+#     pass
 
 
 app.layout = html.Div([
@@ -434,83 +551,28 @@ def update_chart(n, interval_disabled):
     return update_chart_by_context_index(CHART_CONTEXT_INDEX, interval_disabled)
 
 
-# Telegram BOT methods
-def send_poll(question: str, options: list[str]):
-    global chat_id
-    return bot.send_poll(chat_id, question, options, is_anonymous=False)
-
-
-def send_image(image_path: str, caption: str = None):
-    global chat_id
-
-    with open(image_path, 'rb') as image_file:
-        bot.send_photo(chat_id, image_file, caption)
-
-
-def send_signal(image_path: str):
-    # Send the image
-    send_image(image_path, "")
-
-    # Send options poll
-    options = [item[1] for item in user_option_and_text]
-    return send_poll("what should I do?", options).poll.id
-
-
-def send_second_signal(image_path: str, message: str):
-    # Send the image
-    send_image(image_path, "")
-
-    # Send options poll - TRADE / IGNORE
-    options = [user_option_and_text[0][1], user_option_and_text[1][1]]
-    return send_poll(message, options).poll.id
-
-
-def send_price_hit_odb_signal(image_path: str):
-    MESSAGE_TO_SEND = "I'm notifying you that the price hit's the order block - what should I do?"
-    return send_second_signal(image_path, MESSAGE_TO_SEND)
-
-
-def send_reversal_candle_found_on_odb_signal(image_path: str, candle_type):
-    MESSAGE_TO_SEND = f"I'm notifying you that the I found a reversal candle ({candle_type}) on the order block - what should I do?"
-    return send_second_signal(image_path, MESSAGE_TO_SEND)
-
-
-@bot.poll_answer_handler()
-def handle_poll_answer(pollAnswer):
-    # Get related order block
-    db_manager = DatabaseManager(DB_FILE_NAME)
-    related_order_block = db_manager.get_order_block_by_poll_id(pollAnswer.poll_id)
-
-    # Get selected option
-    selected_option_index = pollAnswer.option_ids[0]
-    user_decision = user_option_and_text[selected_option_index][0]
-
-    # Update order block's user decision in DB
-    db_manager.update_user_decision(related_order_block.id, user_decision)
-    db_manager.close_connection()
-
-    # Handle TRADE response
-    if user_decision == UserOption.TRADE:
-        # TODO: take the trade - market - ccxt
-
-        # Update order block in DB to be considered as traded
-        db_manager = DatabaseManager(DB_FILE_NAME)
-        db_manager.set_order_block_as_traded(related_order_block.id)
-        db_manager.close_connection()
-
-
-def bot_polling():
-    bot.polling()
-
-
-# @bot.message_handler()
-# def start(message):
-#     global chat_id
-#     chat_id = message.chat.id
-
-
 if __name__ == "__main__":
     bot_thread = threading.Thread(target=bot_polling)
     bot_thread.start()
 
+    # Ask user which coins to monitor
+    coins_selection_poll_id = send_poll_multiple_answers("Please choose 4 coins to monitor", optional_coins).poll.id
+    # Wait for response
+    user_answer_poll_event.wait()
+
+    user_answer_poll_event.clear()
+
+    # Ask user which coins to monitor
+    timeframe_selection_poll_id = send_poll("Please select time frame to monitor", optional_timeframes).poll.id
+    # Wait for response
+    user_answer_poll_event.wait()
+
+    for symbol in symbols:
+        candles_counter = 0
+        pad_lock = threading.Lock()
+        df = get_candlestick_data_frame(symbol)
+        is_to_run = True
+        chart_contexts.append([symbol, df, start_date_to_run_live_candles, candles_counter, pad_lock, is_to_run])
+
+    webbrowser.open_new("http://127.0.0.1:8050/")
     app.run_server(debug=False)

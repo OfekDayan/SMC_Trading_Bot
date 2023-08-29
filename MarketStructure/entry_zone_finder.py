@@ -3,7 +3,7 @@ from typing import List
 from MarketStructure.pivot_points_detector import PivotPointsDetector
 from Models.candle import Candle
 from Models.entry_zone import EntryZone
-from tools.order_block import OrderBlock
+from tools.order_block import OrderBlock, OrderBlockStatus
 from tools.point import Point
 import plotly.graph_objects as go
 from tools.horizontal_trend_line import HorizontalTrendLine
@@ -37,10 +37,14 @@ class EntryZoneFinder:
             order_block = self.__get_order_block(institutional_candle, is_bullish)
 
             # find the pivot point after BOS / CHoCH
-            next_pivot_point_index = market_structure_points.index(before_pivot_point) + 1
+            after_pivot_point_index = market_structure_points.index(before_pivot_point) + 1
 
-            if next_pivot_point_index < len(market_structure_points):  # next pivot point exists?
-                after_pivot_point = market_structure_points[next_pivot_point_index]
+            if after_pivot_point_index < len(market_structure_points):  # next pivot point exists?
+                after_pivot_point = market_structure_points[after_pivot_point_index]
+
+                # Check if BOS/CHoCH is not crossing between the same pivot points type - ex: HH -> CHoCH -> CHoCH -> HH
+                if after_pivot_point.name == before_pivot_point.name:
+                    continue
 
                 # Check if there is at least 1 imbalance caused by the order block
                 active_zone_df = self.df.loc[pivot_point_starts_the_swing.datetime:after_pivot_point.datetime]
@@ -66,27 +70,79 @@ class EntryZoneFinder:
                 if not is_valid_active_zone:
                     continue
 
-                # check if order block is touched
-                order_block_pullback_df = self.df.loc[after_pivot_point.datetime:]
-
-                for candle_time, row in order_block_pullback_df.iterrows():
-                    candle = Candle(candle_time, row)
-
-                    # Is order block touched?
-                    if order_block.is_touched_rectangle(candle.low_price) or order_block.is_touched_rectangle(
-                            candle.high_price):
-                        order_block.set_as_touched(candle_time)
-                        order_block_pullback_df = order_block_pullback_df.loc[:candle.time]
-                        break
-
-                    # Is order block failed (broke the after pivot point)?
-                    if (order_block.is_bullish and candle.close_price > after_pivot_point.price) or \
-                            (not order_block.is_bullish and candle.close_price < after_pivot_point.price):
-                        order_block.set_as_failed(candle_time)
+                self.__check_order_block_status(order_block, after_pivot_point)
+                order_block_pullback_df = self.df.loc[after_pivot_point.datetime:order_block.get_end_time()]
 
                 order_blocks_and_pullback_df.append((order_block, order_block_pullback_df))
 
         return order_blocks_and_pullback_df
+
+    def __check_order_block_status(self, order_block: OrderBlock, after_pivot_point: Point):
+        touching_candle = None
+        after_pullback_df = self.df.loc[after_pivot_point.datetime:]
+
+        is_touch = False
+
+        # Check touching point
+        for candle_time, row in after_pullback_df.iterrows():
+            candle = Candle(candle_time, row)
+
+            if order_block.is_candle_touch(candle):
+                is_touch = True
+                touching_candle = candle
+                break
+
+            if (order_block.is_bullish and candle.close_price > after_pivot_point.price) or (not order_block.is_bullish and candle.close_price < after_pivot_point.price):
+                order_block.order_block_status = OrderBlockStatus.OUT_OF_RANGE
+                order_block.set_end_time(candle.time)
+                return
+
+        if not is_touch:
+            return
+
+        order_block.order_block_status = OrderBlockStatus.TRADING
+
+        # order block is touched!
+        after_touching_df = after_pullback_df.loc[touching_candle.time:]
+
+        # get position
+        position = order_block.get_position()
+        end_position_time = None
+
+        # Check position levels
+        for candle_time, row in after_touching_df.iterrows():
+            candle = Candle(candle_time, row)
+
+            if not order_block.is_bullish:
+                if candle.high_price > position.stop_loss:
+                    order_block.order_block_status = OrderBlockStatus.HIT_SL
+                    end_position_time = candle.time
+                    order_block.set_end_time(end_position_time)
+                    break
+
+                if candle.low_price <= position.take_profit:
+                    order_block.order_block_status = OrderBlockStatus.HIT_TL
+                    end_position_time = candle.time
+                    order_block.set_end_time(end_position_time)
+                    break
+
+            if order_block.is_bullish:
+                if candle.low_price < position.stop_loss:
+                    order_block.order_block_status = OrderBlockStatus.HIT_SL
+                    end_position_time = candle.time
+                    order_block.set_end_time(end_position_time)
+                    break
+
+                if candle.high_price >= position.take_profit:
+                    order_block.order_block_status = OrderBlockStatus.HIT_TL
+                    end_position_time = candle.time
+                    order_block.set_end_time(end_position_time)
+                    break
+
+        if end_position_time is not None:
+            start_position_time = touching_candle.time
+            position.plot(start_position_time, end_position_time, self.figure)
+
 
     def __get_order_block(self, institutional_candle: Candle, is_bullish: bool) -> OrderBlock:
         odb_bottom_left = Point(institutional_candle.time, institutional_candle.low_price)
@@ -111,7 +167,7 @@ class EntryZoneFinder:
         # find minor's trend pivot points
         pivot_points_detector = PivotPointsDetector(entry_zone.df)
         pivot_points_detector.find()
-        pivot_points_detector.plot_pivot_points(self.figure, 'gray')
+        pivot_points_detector.plot_pivot_points(self.figure, 3, 'gray')
 
         # find last pivot point caused the CHOCH/BOS
         if pivot_points_detector.pivot_points:
@@ -120,22 +176,22 @@ class EntryZoneFinder:
         else:  # no minor trend
             pivot_point_starts_the_swing = suspected_pivot_point
 
-        if entry_zone.is_bullish:
-
-            if pivot_point_starts_the_swing.name == 'HL' or pivot_point_starts_the_swing.name == 'LL':  # last bottom found!
-                pass
-
-            else:
-                print("need to find entry in lower TF!")
-                pivot_point_starts_the_swing = None
-
-        else:  # bearish
-
-            if pivot_point_starts_the_swing.name == 'LH' or pivot_point_starts_the_swing.name == 'HH':  # last top found!
-                pass
-
-            else:
-                print("need to find entry in lower TF!")
-                pivot_point_starts_the_swing = None
+        # if entry_zone.is_bullish:
+        #
+        #     if pivot_point_starts_the_swing.name == 'HL' or pivot_point_starts_the_swing.name == 'LL':  # last bottom found!
+        #         pass
+        #
+        #     else:
+        #         print("need to find entry in lower TF!")
+        #         pivot_point_starts_the_swing = None
+        #
+        # else:  # bearish
+        #
+        #     if pivot_point_starts_the_swing.name == 'LH' or pivot_point_starts_the_swing.name == 'HH':  # last top found!
+        #         pass
+        #
+        #     else:
+        #         print("need to find entry in lower TF!")
+        #         pivot_point_starts_the_swing = None
 
         return pivot_point_starts_the_swing

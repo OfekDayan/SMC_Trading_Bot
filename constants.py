@@ -1,3 +1,4 @@
 
-TIME_FRAME = '1d'
+class Constants:
+    time_frame = '1d'
 

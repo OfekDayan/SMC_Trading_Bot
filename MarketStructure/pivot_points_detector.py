@@ -1,4 +1,5 @@
 import shutil
+from datetime import datetime
 
 import pandas as pd
 from Models.candle import Candle
@@ -67,48 +68,68 @@ class PivotPointsDetector:
             else:
                 self.uptrend()
 
-    def plot_pivot_points(self, figure: go.Figure, color: str = 'black'):
+    def plot_pivot_points(self, figure: go.Figure, marker_size: int = 7, color: str = 'black'):
         for point in self.pivot_points:
-            point.plot(figure, color)
+            point.plot(figure, color, marker_size)
 
     def plot_smc_levels(self, figure: go.Figure):
         for choch_bos in self.choches_and_boses:
             color = 'red' if choch_bos.name == 'CHoCH' else 'blue'
             choch_bos.plot(figure, color)
 
+    def is_recent_high_exist(self):
+        return self.high is not None
+
+    def is_recent_low_exist(self):
+        return self.low is not None
+
+    def is_candle_closes_above_recent_high(self, candle: Candle):
+        return self.is_recent_high_exist() and candle.close_price > self.high.price
+
+    def is_candle_peak_above_recent_high(self, candle: Candle):
+        return self.is_recent_high_exist() and candle.high_price > self.high.price
+
+    def is_candle_closes_below_recent_low(self, candle: Candle):
+        return self.is_recent_low_exist() and candle.close_price < self.low.price
+
+    def is_candle_peak_below_recent_low(self, candle: Candle):
+        return self.is_recent_low_exist() and candle.low_price < self.low.price
+
     def uptrend(self):
         for index, row in self.temp_df[self.current_candle_index:].iterrows():
             self.show_points()  ## ANIMATION
 
+            # Convert df's row to candle
             candle = Candle(index, row)
             self.current_candle_index += 1
 
-            if self.low is not None and self.high is not None:
-                # LL found
-                if candle.close_price < self.low.price:
-                    self.choches_and_boses.append(
-                        HorizontalTrendLine('CHoCH', self.low.datetime, candle.time, self.low.price))
-                    self.low = None
-                    self.dynamic_low = Point(candle.time, candle.low_price)
-                    self.__trend = 'downtrend'
-                    return
+            if self.is_candle_closes_above_recent_high(candle):
+                self.add_bos(self.high.datetime, candle.time, self.high.price)
 
-                # HL found
-                if candle.high_price > self.high.price:
-                    if candle.close_price > self.high.price:
-                        self.choches_and_boses.append(HorizontalTrendLine('BOS', self.high.datetime, candle.time, self.high.price))
+            if self.is_candle_peak_above_recent_high(candle):
+                self.low = Point(self.dynamic_low.datetime, self.dynamic_low.price)
+                self.add_pivot_point(self.low, 'HL')
 
-                    self.low = Point(self.dynamic_low.datetime, self.dynamic_low.price)
-                    self.pivot_points.append(Point(self.low.datetime, self.low.price, 'HL'))
+                self.dynamic_high = Point(candle.time, candle.high_price)
+                self.high = None
+                continue
 
-                    self.dynamic_high = Point(candle.time, candle.high_price)
-                    self.high = None
-                    continue
+            if self.is_candle_closes_below_recent_low(candle):
+                self.add_choch(self.low.datetime, candle.time, self.low.price)
+                self.low = None
+                self.dynamic_low = Point(candle.time, candle.low_price)
+                self.__trend = 'downtrend'
 
+                if self.high is None:
+                    self.high = Point(self.dynamic_high.datetime, self.dynamic_high.price)
+
+                return
+
+            #  Move-up dynamic high with the candle's high price
             if candle.high_price > self.dynamic_high.price:
                 self.dynamic_high = Point(candle.time, candle.high_price)
 
-                if self.high is None or self.dynamic_high.price < self.high.price:
+                if not self.is_recent_high_exist() or self.dynamic_high.price < self.high.price:
                     self.dynamic_low = Point(candle.time, candle.low_price)
 
                 continue
@@ -117,14 +138,15 @@ class PivotPointsDetector:
             if self.dynamic_low is None or candle.low_price < self.dynamic_low.price:
                 self.dynamic_low = Point(candle.time, candle.low_price)
 
-            if self.high is None:
+            if self.is_recent_low_exist() and not self.is_recent_high_exist():
                 swing_start = self.low
                 swing_end = self.dynamic_high
                 retracement_level = self.dynamic_low
 
                 if self.retracement_verifier.is_valid(self.temp_df, swing_start, swing_end, retracement_level):
+                    # Set new high and add HH pivot point
                     self.high = Point(self.dynamic_high.datetime, self.dynamic_high.price)
-                    self.pivot_points.append(Point(self.high.datetime, self.high.price, 'HH'))
+                    self.add_pivot_point(self.high, 'HH')
 
                     if self.animation_chart is not None:
                         fibonacci_retracement = FibonacciRetracement(swing_start, swing_end)
@@ -137,27 +159,27 @@ class PivotPointsDetector:
             candle = Candle(index, row)
             self.current_candle_index += 1
 
-            if self.low is not None and self.high is not None:
-                # HH found
-                if candle.close_price > self.high.price:
-                    self.choches_and_boses.append(
-                        HorizontalTrendLine('CHoCH', self.high.datetime, candle.time, self.high.price))
-                    self.high = None
-                    self.dynamic_high = Point(candle.time, candle.high_price)
-                    self.__trend = 'uptrend'
-                    return
+            if self.is_candle_closes_below_recent_low(candle):
+                self.add_bos(self.low.datetime, candle.time, self.low.price)
 
-                # LH found
-                if candle.low_price < self.low.price:
-                    if candle.close_price < self.low.price:
-                        self.choches_and_boses.append(HorizontalTrendLine('BOS', self.low.datetime, candle.time, self.low.price))
+            if self.is_candle_peak_below_recent_low(candle):
+                self.high = Point(self.dynamic_high.datetime, self.dynamic_high.price)
+                self.add_pivot_point(self.high, 'LH')
 
-                    self.high = Point(self.dynamic_high.datetime, self.dynamic_high.price)
-                    self.pivot_points.append(Point(self.high.datetime, self.high.price, 'LH'))
+                self.dynamic_low = Point(candle.time, candle.low_price)
+                self.low = None
+                continue
 
-                    self.dynamic_low = Point(candle.time, candle.low_price)
-                    self.low = None
-                    continue
+            if self.is_candle_closes_above_recent_high(candle):
+                self.add_choch(self.high.datetime, candle.time, self.high.price)
+                self.high = None
+                self.dynamic_high = Point(candle.time, candle.high_price)
+                self.__trend = 'uptrend'
+
+                if self.low is None:
+                    self.low = Point(self.dynamic_low.datetime, self.dynamic_low.price)
+
+                return
 
             if candle.low_price < self.dynamic_low.price:
                 self.dynamic_low = Point(candle.time, candle.low_price)
@@ -172,18 +194,30 @@ class PivotPointsDetector:
                 self.dynamic_high = Point(candle.time, candle.high_price)
 
             # LL
-            if self.low is None:
+            if self.is_recent_high_exist() and not self.is_recent_low_exist():
                 swing_start = self.high
                 swing_end = self.dynamic_low
                 retracement_level = self.dynamic_high
 
                 if self.retracement_verifier.is_valid(self.temp_df, swing_start, swing_end, retracement_level):
+                    # Set new low and add LL pivot point
                     self.low = Point(self.dynamic_low.datetime, self.dynamic_low.price)
-                    self.pivot_points.append(Point(self.low.datetime, self.low.price, 'LL'))
+                    self.add_pivot_point(self.low, 'LL')
 
                     if self.animation_chart is not None:
                         fibonacci_retracement = FibonacciRetracement(swing_start, swing_end)
                         fibonacci_retracement.plot(self.animation_chart, swing_end.datetime)
+
+    def add_pivot_point(self, point: Point, name: str):
+        self.pivot_points.append(Point(point.datetime, point.price, name))
+
+    def add_bos(self, start_x: datetime, end_x: datetime, y: float):
+        SMC_LEVEL_TYPE = 'BOS'
+        self.choches_and_boses.append(HorizontalTrendLine(SMC_LEVEL_TYPE, start_x, end_x, y))
+
+    def add_choch(self, start_x: datetime, end_x: datetime, y: float):
+        SMC_LEVEL_TYPE = 'CHoCH'
+        self.choches_and_boses.append(HorizontalTrendLine(SMC_LEVEL_TYPE, start_x, end_x, y))
 
     def show_points(self):
         if self.animation_chart is None:

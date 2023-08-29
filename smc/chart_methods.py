@@ -27,7 +27,7 @@ class ChartMethods:
         # Set values less than the average to 0 in the "Imbalance" column
         positive_imbalances_df = self.df[self.df['Imbalance'] > 0]
         average_imbalance = positive_imbalances_df['Imbalance'].mean()
-        self.df.loc[self.df['Imbalance'] < average_imbalance * 3, 'Imbalance'] = 0
+        self.df.loc[self.df['Imbalance'] < average_imbalance * 2, 'Imbalance'] = 0
 
         # add to chart
         if figure:
