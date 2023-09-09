@@ -50,7 +50,7 @@ app = dash.Dash(__name__)
 # chart_width_pixels = 800
 chart_height_pixels = 1200
 
-start_date_to_run_live_candles = datetime.datetime(2023, 8, 25 ,1)
+start_date_to_run_live_candles = datetime.datetime(2023, 8, 25)
 # start_date_to_run_live_candles = datetime.datetime.today()
 
 PIVOT_POINTS_SIMULATOR = False
