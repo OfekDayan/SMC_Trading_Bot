@@ -1,18 +1,17 @@
 from datetime import timedelta
 import plotly.graph_objects as go
-
-from constants import Constants
 from tools.horizontal_trend_line import HorizontalTrendLine
 
 
 class Candle:
-    def __init__(self, time, row):
+    def __init__(self, time, row, timeframe):
         self.time = time
         self.open_price = row['Open']
         self.close_price = row['Close']
         self.high_price = row['High']
         self.low_price = row['Low']
         self.__row = row
+        self.timeframe = timeframe
 
     def is_bullish(self) -> bool:
         return self.close_price > self.open_price
@@ -30,7 +29,7 @@ class Candle:
         if not self.is_imbalance():
             return
 
-        single_candle_timedelta = self.__parse_timedelta(Constants.time_frame)
+        single_candle_timedelta = self.__parse_timedelta(self.timeframe)
         from_time = self.time - single_candle_timedelta
         to_time = self.time + single_candle_timedelta
         imbalance_start = self.__row['Imbalance_Start']

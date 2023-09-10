@@ -47,11 +47,10 @@ bot = telebot.TeleBot(BOT_ID)
 INTERVAL = 3000
 NUMBER_OF_CANDLES = 400
 app = dash.Dash(__name__)
-# chart_width_pixels = 800
+chart_width_pixels = 800
 chart_height_pixels = 1200
 
-start_date_to_run_live_candles = datetime.datetime(2023, 8, 25)
-# start_date_to_run_live_candles = datetime.datetime.today()
+start_date_to_run_live_candles = datetime.datetime(2023, 9, 5)
 
 PIVOT_POINTS_SIMULATOR = False
 is_to_update_symbols = True
@@ -65,33 +64,89 @@ def get_coin_image_path(symbol: str):
     return Image.open(path)
 
 
+def slice_list_by_timestamp_range(main_list, start_timestamp, end_timestamp):
+    sliced_list = []
+    for sublist in main_list:
+        timestamp = sublist[0]
+        if start_timestamp <= timestamp / 1000 <= end_timestamp:
+            sliced_list.append(sublist)
+    return sliced_list
+
+
+def write_df(symbol: str, candlestick_data):
+    # Slice the DataFrame using loc
+    start_date = int(pd.Timestamp(datetime.datetime(2022, 11, 8, 0, 0, 0)).timestamp())
+    end_date = int(pd.Timestamp(datetime.datetime(2023, 5, 15, 0, 0, 0)).timestamp())
+    candlestick_data_to_write = slice_list_by_timestamp_range(candlestick_data, start_date, end_date)
+
+    file_name = f"dataframes\\{symbol}_" + datetime.datetime.now().strftime("%Y%m%d%H%M%S") + ".txt"
+
+    with open(file_name, 'w') as file:
+        file.write(Constants.time_frame + '\n')  # timeframe
+        file.write('2023-03-13 00:00:00\n')      # start live running
+
+        # Date
+        for item in candlestick_data_to_write:
+            file.write(str(item) + '\n')
+
+
+def read_df(path):
+    candlestick_data = []
+
+    lines = []
+    with open(path, 'r') as file:
+        for line in file:
+            lines.append(line)
+
+    timeframe = lines[0].rstrip('\n')
+    start_live_running = datetime.datetime.strptime(lines[1].rstrip('\n'), "%Y-%m-%d %H:%M:%S")
+
+    for line in lines[2:]:
+        line = line.strip().replace('[', '').replace(']', '').split(',')
+        line_as_floats = [float(item) for item in line]
+        candlestick_data.append(line_as_floats)
+
+    df = pd.DataFrame(candlestick_data, columns=['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
+    df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='ms')
+    df.set_index('Timestamp', inplace=True)
+
+    return df, timeframe, start_live_running
+
+
+
 def get_candlestick_data_frame(symbol: str) -> pandas.DataFrame:
+    timeframe = Constants.time_frame
+    start_live_running = start_date_to_run_live_candles
 
     # Get the data frame from API
     exchange = ccxt.binance()
     exchange.options = {'defaultType': 'future', 'adjustForTimeDifference': True}
     candlestick_data = exchange.fetch_ohlcv(symbol, Constants.time_frame, limit=NUMBER_OF_CANDLES)
 
-    # Prepare data frame
     df = pd.DataFrame(candlestick_data, columns=['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
     df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='ms')
     df.set_index('Timestamp', inplace=True)
 
-    return df
+    if symbol == "LTCUSDT":
+        pass
+        # write_df(symbol, candlestick_data)
+        # return read_df("dataframes\LTCUSDT_20230911022725.txt")
+
+    return df, timeframe, start_live_running
 
 
-def get_all_order_blocks(df: pandas.DataFrame, symbol: str, chart: go.Figure) -> list[(OrderBlock, pandas.DataFrame)]:
+def get_all_order_blocks(df: pandas.DataFrame, symbol: str, chart: go.Figure, timeframe) -> list[(OrderBlock, pandas.DataFrame)]:
     """
         Gets all order blocks and their pullback dataframe
     """
     # For all candles, checks candle type & calculates its imbalance value
-    chart_methods = ChartMethods(df)
+    chart_methods = ChartMethods(df, timeframe)
     chart_methods.calculate_candles_patterns()
     chart_methods.calculate_imbalances(chart)
     chart_methods.calculate_big_candles()
 
     # Find pivot points and SMC levels
-    pivot_points_detector = PivotPointsDetector(df)
+    pivot_points_detector = PivotPointsDetector(df, timeframe)
     pivot_points_detector.find()
 
     pivot_points_detector.plot_smc_levels(chart)
@@ -101,7 +156,7 @@ def get_all_order_blocks(df: pandas.DataFrame, symbol: str, chart: go.Figure) ->
     pivot_points = pivot_points_detector.pivot_points
 
     # Find order block and the corresponding pullback data frame
-    entry_zone_finder = EntryZoneFinder(df, chart, symbol)
+    entry_zone_finder = EntryZoneFinder(df, chart, symbol, timeframe)
     result = entry_zone_finder.find(choches_and_boses, pivot_points)
 
     return result
@@ -176,9 +231,9 @@ def resume_symbol_updating(symbol: str):
             break
 
 
-def handle_new_order_blocks(order_block: OrderBlock, pullback_zone_df: pandas.DataFrame, chart: go.Figure):
+def handle_new_order_blocks(order_block: OrderBlock, pullback_zone_df: pandas.DataFrame, chart: go.Figure, timeframe):
     # Signals finder
-    signal_detector = SignalDetector(order_block, pullback_zone_df)
+    signal_detector = SignalDetector(order_block, pullback_zone_df, timeframe)
     is_to_send_signal = signal_detector.is_last_candle_reached_signal_price(chart)
 
     if is_to_send_signal:
@@ -188,7 +243,7 @@ def handle_new_order_blocks(order_block: OrderBlock, pullback_zone_df: pandas.Da
         # Send notification to user
         image_path = "chart.jpg"
         chart.write_image(image_path, scale=4)
-        poll_id = send_signal(image_path)
+        poll_id = send_signal(image_path, order_block.symbol)
 
         # Get 90% fibo level if the user will choose in the future UserOption.NOTIFY_REVERSAL_CANDLE_FOUND
         order_block.ninty_percent_fibo_price = signal_detector.get_price_by_fib_level(90)
@@ -199,7 +254,7 @@ def handle_new_order_blocks(order_block: OrderBlock, pullback_zone_df: pandas.Da
         db_manager.close_connection()
 
 
-def get_updated_chart(interval_disabled, symbol: str, df: pandas.DataFrame, candles_counter: int, start_date_to_run_live_candles, is_to_run) -> go.Figure:
+def get_updated_chart(interval_disabled, symbol: str, df: pandas.DataFrame, candles_counter: int, start_date_to_run_live_candles, is_to_run, timeframe) -> go.Figure:
     if interval_disabled or not is_to_run:
         # If the interval is disabled (chart frozen), return the current figure without updating
         return dash.no_update
@@ -217,9 +272,9 @@ def get_updated_chart(interval_disabled, symbol: str, df: pandas.DataFrame, cand
     chart = go.Figure(data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'])])
 
     # Analyze
-    results = get_all_order_blocks(df, symbol, chart)
+    results = get_all_order_blocks(df, symbol, chart, timeframe)
 
-    chart.update_layout(showlegend=False, xaxis_rangeslider_visible=False, height=chart_height_pixels)
+    chart.update_layout(showlegend=False, xaxis_rangeslider_visible=False, height=chart_height_pixels, width=chart_width_pixels)
 
     # Check each order block
     for result in results:
@@ -230,11 +285,11 @@ def get_updated_chart(interval_disabled, symbol: str, df: pandas.DataFrame, cand
         order_block.plot(df, chart)
 
         # Handle
-        handle_new_order_blocks(order_block, pullback_zone_df, chart)
+        handle_new_order_blocks(order_block, pullback_zone_df, chart, timeframe)
 
     # Get last candle
     new_candle_row = df.tail(1).iloc[0]
-    last_candle = Candle(new_candle_row.index[0], new_candle_row)
+    last_candle = Candle(new_candle_row.index[0], new_candle_row, timeframe)
 
     # Handle existing order blocks
     handle_existing_order_blocks(symbol, chart, last_candle)
@@ -251,9 +306,10 @@ def update_chart_by_context_index(context_index: int, interval_disabled: bool):
     candles_counter = chart_context[3]
     pad_lock = chart_context[4]
     is_to_run = chart_context[5]
+    timeframe = chart_context[6]
 
     pad_lock.acquire()
-    updated_chart = get_updated_chart(interval_disabled, symbol, df, candles_counter, start_date_to_run_live_candles, is_to_run)
+    updated_chart = get_updated_chart(interval_disabled, symbol, df, candles_counter, start_date_to_run_live_candles, is_to_run, timeframe)
     chart_context[3] += 1
     pad_lock.release()
 
@@ -296,13 +352,13 @@ def send_image(image_path: str, caption: str = None):
         bot.send_photo(chat_id, image_file, caption)
 
 
-def send_signal(image_path: str):
+def send_signal(image_path: str, symbol: str):
     # Send the image
     send_image(image_path, "")
 
     # Send options poll
     options = [item[1] for item in user_option_and_text]
-    return send_poll("what should I do?", options).poll.id
+    return send_poll(f"what should I do ({symbol})?", options).poll.id
 
 
 def send_second_signal(image_path: str, message: str):
@@ -570,9 +626,9 @@ if __name__ == "__main__":
     for symbol in symbols:
         candles_counter = 0
         pad_lock = threading.Lock()
-        df = get_candlestick_data_frame(symbol)
+        df, timeframe, start_live_running = get_candlestick_data_frame(symbol)
         is_to_run = True
-        chart_contexts.append([symbol, df, start_date_to_run_live_candles, candles_counter, pad_lock, is_to_run])
+        chart_contexts.append([symbol, df, start_live_running, candles_counter, pad_lock, is_to_run, timeframe])
 
     webbrowser.open_new("http://127.0.0.1:8050/")
     app.run_server(debug=False)

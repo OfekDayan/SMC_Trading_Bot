@@ -7,9 +7,10 @@ from tools.point import Point
 
 
 class SignalDetector:
-    def __init__(self, order_block: OrderBlock, pullback_zone_df: pandas.DataFrame):
+    def __init__(self, order_block: OrderBlock, pullback_zone_df: pandas.DataFrame, timeframe):
         self.order_block = order_block
         self.pullback_zone_df = pullback_zone_df
+        self.timeframe = timeframe
 
     def get_price_by_fib_level(self, fibo_level) -> float:
         # Find swing start and end
@@ -39,7 +40,7 @@ class SignalDetector:
 
         # Find the time of the candle touched the "signal level"
         for candle_time, row in self.pullback_zone_df.iterrows():
-            candle = Candle(candle_time, row)
+            candle = Candle(candle_time, row, self.timeframe)
 
             if (self.order_block.is_bullish and candle.low_price <= price_to_send_signal) or \
                     (not self.order_block.is_bullish and candle.high_price >= price_to_send_signal):

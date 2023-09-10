@@ -75,9 +75,10 @@ class OrderBlock:
                                     textposition="middle center"))
 
     def get_position(self):
-        SL_TP_RATIO = 2.5
+        SL_TP_RATIO = 1.5
 
-        half_order_block_size = (self.top_right.price - self.bottom_left.price) / 2
+        # half_order_block_size = (self.top_right.price - self.bottom_left.price) / 2
+        half_order_block_size = (self.top_right.price - self.bottom_left.price) * 1.5
 
         if self.is_bullish:
             sl_price = self.bottom_left.price - half_order_block_size

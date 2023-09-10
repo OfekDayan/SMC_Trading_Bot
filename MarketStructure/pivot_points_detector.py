@@ -15,7 +15,7 @@ IMAGES_FOLDER = "pivot_points_animation"
 
 
 class PivotPointsDetector:
-    def __init__(self, df: pd.DataFrame, is_animation_mode: bool = False):
+    def __init__(self, df: pd.DataFrame, timeframe, is_animation_mode: bool = False):
         self.df = df
         self.temp_df = df.copy()  # Create a copy of the original DataFrame
         self.__trend = None
@@ -29,6 +29,7 @@ class PivotPointsDetector:
         self.pivot_points = []
         self.animation_chart = None
         self.animation_index = 0
+        self.timeframe = timeframe
 
         if is_animation_mode:
             self.delete_and_create_folder(IMAGES_FOLDER)
@@ -100,7 +101,7 @@ class PivotPointsDetector:
             self.show_points()  ## ANIMATION
 
             # Convert df's row to candle
-            candle = Candle(index, row)
+            candle = Candle(index, row, self.timeframe)
             self.current_candle_index += 1
 
             if self.is_candle_closes_above_recent_high(candle):
@@ -143,7 +144,7 @@ class PivotPointsDetector:
                 swing_end = self.dynamic_high
                 retracement_level = self.dynamic_low
 
-                if self.retracement_verifier.is_valid(self.temp_df, swing_start, swing_end, retracement_level):
+                if self.retracement_verifier.is_valid(self.temp_df, swing_start, swing_end, retracement_level, self.timeframe):
                     # Set new high and add HH pivot point
                     self.high = Point(self.dynamic_high.datetime, self.dynamic_high.price)
                     self.add_pivot_point(self.high, 'HH')
@@ -156,7 +157,7 @@ class PivotPointsDetector:
         for index, row in self.temp_df[self.current_candle_index:].iterrows():
             self.show_points()  ## ANIMATION
 
-            candle = Candle(index, row)
+            candle = Candle(index, row, self.timeframe)
             self.current_candle_index += 1
 
             if self.is_candle_closes_below_recent_low(candle):
@@ -199,7 +200,7 @@ class PivotPointsDetector:
                 swing_end = self.dynamic_low
                 retracement_level = self.dynamic_high
 
-                if self.retracement_verifier.is_valid(self.temp_df, swing_start, swing_end, retracement_level):
+                if self.retracement_verifier.is_valid(self.temp_df, swing_start, swing_end, retracement_level, self.timeframe):
                     # Set new low and add LL pivot point
                     self.low = Point(self.dynamic_low.datetime, self.dynamic_low.price)
                     self.add_pivot_point(self.low, 'LL')

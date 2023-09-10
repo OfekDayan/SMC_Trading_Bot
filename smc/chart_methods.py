@@ -5,8 +5,9 @@ import talib
 
 
 class ChartMethods:
-    def __init__(self, df: pandas.DataFrame):
+    def __init__(self, df: pandas.DataFrame, timeframe):
         self.df = df
+        self.timeframe = timeframe
 
     def calculate_imbalances(self, figure: go.Figure = None):
         self.df['Imbalance'] = 0
@@ -32,7 +33,7 @@ class ChartMethods:
         # add to chart
         if figure:
             for index, row in self.df[1:].iterrows():
-                candle = Candle(index, row)
+                candle = Candle(index, row, self.timeframe)
                 candle.plot_imbalance(figure)
 
                 # TODO: remove me!

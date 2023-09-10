@@ -10,10 +10,11 @@ from tools.horizontal_trend_line import HorizontalTrendLine
 
 
 class EntryZoneFinder:
-    def __init__(self, df: pandas.DataFrame, figure: go.Figure, symbol: str):
+    def __init__(self, df: pandas.DataFrame, figure: go.Figure, symbol: str, timeframe):
         self.figure = figure
         self.df = df
         self.symbol = symbol
+        self.timeframe = timeframe
 
     def find(self, choches_and_boses: List[HorizontalTrendLine], market_structure_points: List[Point]) -> list[(OrderBlock, pandas.DataFrame)]:
         order_blocks_and_pullback_df = []
@@ -54,7 +55,7 @@ class EntryZoneFinder:
                 is_valid_active_zone = False
 
                 for index, row in active_zone_df.iterrows():
-                    candle = Candle(index, row)
+                    candle = Candle(index, row, self.timeframe)
 
                     if candle.is_imbalance():
                         imbalances_counter += 1
@@ -85,7 +86,7 @@ class EntryZoneFinder:
 
         # Check touching point
         for candle_time, row in after_pullback_df.iterrows():
-            candle = Candle(candle_time, row)
+            candle = Candle(candle_time, row, self.timeframe)
 
             if order_block.is_candle_touch(candle):
                 is_touch = True
@@ -111,7 +112,7 @@ class EntryZoneFinder:
 
         # Check position levels
         for candle_time, row in after_touching_df.iterrows():
-            candle = Candle(candle_time, row)
+            candle = Candle(candle_time, row, self.timeframe)
 
             if not order_block.is_bullish:
                 if candle.high_price > position.stop_loss:
@@ -139,9 +140,13 @@ class EntryZoneFinder:
                     order_block.set_end_time(end_position_time)
                     break
 
-        if end_position_time is not None:
-            start_position_time = touching_candle.time
-            position.plot(start_position_time, end_position_time, self.figure)
+        until_time = end_position_time
+
+        if until_time is None:
+            until_time = after_touching_df.index[-1]
+
+        start_position_time = touching_candle.time
+        position.plot(start_position_time, until_time, self.figure)
 
 
     def __get_order_block(self, institutional_candle: Candle, is_bullish: bool) -> OrderBlock:
@@ -152,20 +157,20 @@ class EntryZoneFinder:
     def __find_institutional_candle(self, pivot_point_starts_the_swing: Point, is_bullish: bool) -> Candle:
         # find the institutional candle
         institutional_candle = Candle(pivot_point_starts_the_swing.datetime,
-                                      self.df.loc[pivot_point_starts_the_swing.datetime])
+                                      self.df.loc[pivot_point_starts_the_swing.datetime], self.timeframe)
 
         while (is_bullish and institutional_candle.is_bullish()) or (
                 not is_bullish and institutional_candle.is_bearish()):
             # take one candle before
             current_candle_index = self.df.index.get_loc(institutional_candle.time)
             previous_candle_row = self.df.iloc[current_candle_index - 1]
-            institutional_candle = Candle(previous_candle_row.name, previous_candle_row)
+            institutional_candle = Candle(previous_candle_row.name, previous_candle_row, self.timeframe)
 
         return institutional_candle
 
     def __find_pivot_point_caused_bos_choch(self, suspected_pivot_point: Point, entry_zone: EntryZone) -> Point:
         # find minor's trend pivot points
-        pivot_points_detector = PivotPointsDetector(entry_zone.df)
+        pivot_points_detector = PivotPointsDetector(entry_zone.df, self.timeframe)
         pivot_points_detector.find()
         pivot_points_detector.plot_pivot_points(self.figure, 3, 'gray')
 
