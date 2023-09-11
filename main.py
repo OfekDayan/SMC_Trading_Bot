@@ -204,7 +204,7 @@ def handle_price_hit_odb(order_block: OrderBlock, last_candle: Candle, chart: go
         # Send notification - trade or ignore
         image_path = "chart.jpg"
         chart.write_image(image_path, scale=4)
-        poll_id = send_price_hit_odb_signal(image_path)
+        poll_id = send_price_hit_odb_signal(image_path, order_block.symbol)
 
         # Update the poll id and user decision
         db_manager = DatabaseManager(Constants.db_file_name)
@@ -228,7 +228,7 @@ def handle_reversal_candle_on_odb(order_block: OrderBlock, last_candle: Candle, 
         image_path = "chart.jpg"
         chart.write_image(image_path, scale=4)
         candle_type = last_candle.get_candle_type()
-        poll_id = send_reversal_candle_found_on_odb_signal(image_path, candle_type)
+        poll_id = send_reversal_candle_found_on_odb_signal(image_path, candle_type, order_block.symbol)
 
         # Update the poll id and user decision
         db_manager = DatabaseManager(Constants.db_file_name)
@@ -426,13 +426,13 @@ def send_second_signal(image_path: str, message: str):
     return send_poll(message, options).poll.id
 
 
-def send_price_hit_odb_signal(image_path: str):
-    MESSAGE_TO_SEND = "I'm notifying you that the price hit's the order block - what should I do?"
+def send_price_hit_odb_signal(image_path: str, symbol: str):
+    MESSAGE_TO_SEND = f"I'm notifying you that the price hit's the order block ({symbol})- what should I do?"
     return send_second_signal(image_path, MESSAGE_TO_SEND)
 
 
-def send_reversal_candle_found_on_odb_signal(image_path: str, candle_type):
-    MESSAGE_TO_SEND = f"I'm notifying you that the I found a reversal candle ({candle_type}) on the order block - what should I do?"
+def send_reversal_candle_found_on_odb_signal(image_path: str, candle_type, symbol: str):
+    MESSAGE_TO_SEND = f"I'm notifying you that the I found a reversal candle ({candle_type}) on the order block ({symbol})- what should I do?"
     return send_second_signal(image_path, MESSAGE_TO_SEND)
 
 
