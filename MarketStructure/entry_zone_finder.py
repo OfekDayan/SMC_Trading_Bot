@@ -1,12 +1,15 @@
 import pandas
 from typing import List
+from DAL.DataAccessLayer import DatabaseManager
 from MarketStructure.pivot_points_detector import PivotPointsDetector
 from Models.candle import Candle
 from Models.entry_zone import EntryZone
+from constants import Constants
 from tools.order_block import OrderBlock, OrderBlockStatus
 from tools.point import Point
 import plotly.graph_objects as go
 from tools.horizontal_trend_line import HorizontalTrendLine
+from user_options import UserOption
 
 
 class EntryZoneFinder:
@@ -140,14 +143,28 @@ class EntryZoneFinder:
                     order_block.set_end_time(end_position_time)
                     break
 
-        until_time = end_position_time
+        # Check order block's decision in DB
+        db_manager = DatabaseManager(Constants.db_file_name)
+        user_decision = db_manager.get_user_decision(order_block.id)
+        db_manager.close_connection()
 
-        if until_time is None:
-            until_time = after_touching_df.index[-1]
+        if len(user_decision) == 0:
+            # user did not answer the poll yet
+            return
 
-        start_position_time = touching_candle.time
-        position.plot(start_position_time, until_time, self.figure)
+        order_block.user_decision = user_decision[0][0]
 
+        # Plot position if you want to trade
+        if order_block.user_decision == UserOption.TRADE.value:
+
+            # Get end time
+            until_time = end_position_time
+
+            if until_time is None:
+                until_time = after_touching_df.index[-1]
+
+            start_position_time = touching_candle.time
+            position.plot(start_position_time, until_time, self.figure)
 
     def __get_order_block(self, institutional_candle: Candle, is_bullish: bool) -> OrderBlock:
         odb_bottom_left = Point(institutional_candle.time, institutional_candle.low_price)

@@ -29,6 +29,7 @@ class OrderBlock:
         self.ninty_percent_fibo_price = None
         self.symbol = symbol
         self.id = int(self.bottom_left.datetime.timestamp())
+        self.is_tl_sl_message_sent = False
 
     def get_top_left(self):
         return Point(self.bottom_left.datetime, self.top_right.price)
@@ -40,8 +41,8 @@ class OrderBlock:
         return self.top_right.datetime
 
     def plot(self, df: pandas.DataFrame, figure: go.Figure):
-        timeframe = self.__get_timeframe(df)
-        name = f'{timeframe} ODB'
+        # timeframe = self.__get_timeframe(df)
+        name = f'Order Block'
         color = 'White'
 
         match self.order_block_status:
@@ -51,14 +52,16 @@ class OrderBlock:
             case OrderBlockStatus.OUT_OF_RANGE:
                 color = "Black"
 
-            case OrderBlockStatus.HIT_SL:
-                color = "Red"
+        if self.user_decision == UserOption.TRADE:
+            match self.order_block_status:
+                case OrderBlockStatus.HIT_SL:
+                    color = "Red"
 
-            case OrderBlockStatus.HIT_TL:
-                color = "Green"
+                case OrderBlockStatus.HIT_TL:
+                    color = "Green"
 
-            case OrderBlockStatus.TRADING:
-                color = "Blue"
+                case OrderBlockStatus.TRADING:
+                    color = "Blue"
 
         x0 = self.bottom_left.datetime
         y0 = self.bottom_left.price

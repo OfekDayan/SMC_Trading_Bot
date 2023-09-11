@@ -35,7 +35,11 @@ symbols = []
 optional_timeframes = ['1m', '5m', '15m', '30m', '1h', '1d']
 optional_coins = ['BTC', 'ETH', 'MATIC', 'SAND', 'LTC', 'BNB', 'SOL', 'ADA', 'DOT', 'DOGE']
 
-DB_FILE_NAME = "SmcTradingBotDB.db"
+
+is_exist = os.path.exists(Constants.db_file_name)
+
+if is_exist:
+    os.remove(Constants.db_file_name)
 
 user_answer_poll_event = threading.Event()
 
@@ -45,20 +49,14 @@ BOT_ID = '5341091307:AAHGuAJDKLl3zzjIpfGhaVpW3Y3UgBNAXG4'
 bot = telebot.TeleBot(BOT_ID)
 
 records_lock = threading.Lock()
-record_files = [
-    'dataframes\BTCUSDT_1d_20230911230832.txt',
-    'dataframes\MATICUSDT_1d_20230911221453.txt',
-    'dataframes\LTCUSDT_1d_20230911022725.txt',
-    'dataframes\AAVEUSDT_1d_20230911223200.txt'
-]
-
+record_files = [os.path.join(root, filename) for root, _, files in os.walk('dataframes') for filename in files]
 taken_records_files_index = []
 
 # Dash app
-INTERVAL = 1500
+INTERVAL = 2500
 NUMBER_OF_CANDLES = 400
 app = dash.Dash(__name__)
-chart_width_pixels = 2000
+chart_width_pixels = 2800
 chart_height_pixels = 1200
 
 start_date_to_run_live_candles = datetime.datetime(2023, 9, 12)
@@ -88,17 +86,16 @@ def slice_list_by_timestamp_range(main_list, start_timestamp, end_timestamp):
 
 def write_df(symbol: str, candlestick_data):
     # Slice the DataFrame using loc
-    start_date = int(pd.Timestamp(datetime.datetime(2021, 11, 1, 0, 0, 0)).timestamp())
-    end_date = int(pd.Timestamp(datetime.datetime(2022, 5, 5, 0, 0, 0)).timestamp())
+    start_date = int(pd.Timestamp(datetime.datetime(2021, 6, 14, 0, 0, 0)).timestamp())
+    end_date = int(pd.Timestamp(datetime.datetime(2021, 10, 21, 0, 0, 0)).timestamp())
     candlestick_data_to_write = slice_list_by_timestamp_range(candlestick_data, start_date, end_date)
 
     # candlestick_data_to_write = candlestick_data
-
     file_name = f"dataframes\\{symbol}_{Constants.time_frame}_" + datetime.datetime.now().strftime("%Y%m%d%H%M%S") + ".txt"
 
     with open(file_name, 'w') as file:
         file.write(Constants.time_frame + '\n')  # timeframe
-        file.write('2022-02-01 00:00:00\n')      # start live running
+        file.write('2021-09-16 00:00:00\n')      # start live running
 
         # Date
         for item in candlestick_data_to_write:
@@ -137,13 +134,19 @@ def get_candlestick_data_frame(symbol: str) -> pandas.DataFrame:
         exchange = ccxt.binance()
         exchange.options = {'defaultType': 'future', 'adjustForTimeDifference': True}
 
-        # since = int(datetime.datetime(2021, 6, 1, 0, 0, 0).timestamp() * 1000)
-        # candlestick_data = exchange.fetch_ohlcv(symbol, Constants.time_frame, since=x, limit=NUMBER_OF_CANDLES)
-        candlestick_data = exchange.fetch_ohlcv(symbol, Constants.time_frame, limit=NUMBER_OF_CANDLES)
+        since = int(datetime.datetime(2021, 2, 1, 0, 0, 0).timestamp() * 1000)
+        candlestick_data = exchange.fetch_ohlcv(symbol, Constants.time_frame, since=since, limit=NUMBER_OF_CANDLES)
+        # candlestick_data = exchange.fetch_ohlcv(symbol, Constants.time_frame, limit=NUMBER_OF_CANDLES)
 
         df = pd.DataFrame(candlestick_data, columns=['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
         df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='ms')
         df.set_index('Timestamp', inplace=True)
+
+        # Write mode
+        if symbol == "DOTUSDT":
+            write_df(symbol, candlestick_data)
+
+        return df, timeframe, start_live_running
 
     else:
         r = random.Random()
@@ -158,15 +161,9 @@ def get_candlestick_data_frame(symbol: str) -> pandas.DataFrame:
         file_name_to_load = record_files[random_index]
 
         records_lock.release()
+        print(f"Symbol: {symbol} - {file_name_to_load}")
 
         return read_df(file_name_to_load)
-
-    # if symbol == "BTCUSDT":
-        # pass
-        # write_df(symbol, candlestick_data)
-        # return read_df("dataframes\LTCUSDT_20230911022725.txt")
-
-    return df, timeframe, start_live_running
 
 
 def get_all_order_blocks(df: pandas.DataFrame, symbol: str, chart: go.Figure, timeframe) -> list[(OrderBlock, pandas.DataFrame)]:
@@ -201,13 +198,16 @@ def handle_price_hit_odb(order_block: OrderBlock, last_candle: Candle, chart: go
         order_block.is_bullish else last_candle.high_price >= order_block.bottom_left.price
 
     if is_price_hits_odb:
+        # Freeze updating
+        freeze_symbol_updating(order_block.symbol)
+
         # Send notification - trade or ignore
         image_path = "chart.jpg"
         chart.write_image(image_path, scale=4)
         poll_id = send_price_hit_odb_signal(image_path)
 
         # Update the poll id and user decision
-        db_manager = DatabaseManager(DB_FILE_NAME)
+        db_manager = DatabaseManager(Constants.db_file_name)
         db_manager.update_poll_id(order_block.id, poll_id)
         db_manager.update_user_decision(order_block.id, UserOption.NONE)
         db_manager.close_connection()
@@ -221,20 +221,24 @@ def handle_reversal_candle_on_odb(order_block: OrderBlock, last_candle: Candle, 
         if order_block.is_bullish else ninty_percent_fibo_price <= last_candle.close_price <= order_block.top_right.price
 
     if is_candle_in_checking_range and last_candle.is_reversal():
+        # Freeze updating
+        freeze_symbol_updating(order_block.symbol)
+
+        # Send notification - trade or ignore
         image_path = "chart.jpg"
         chart.write_image(image_path, scale=4)
         candle_type = last_candle.get_candle_type()
         poll_id = send_reversal_candle_found_on_odb_signal(image_path, candle_type)
 
         # Update the poll id and user decision
-        db_manager = DatabaseManager(DB_FILE_NAME)
+        db_manager = DatabaseManager(Constants.db_file_name)
         db_manager.update_poll_id(order_block.id, poll_id)
         db_manager.update_user_decision(order_block.id, UserOption.NONE)
         db_manager.close_connection()
 
 
 def handle_existing_order_blocks(symbol: str, chart: go.Figure, last_candle: Candle):
-    db_manager = DatabaseManager(DB_FILE_NAME)
+    db_manager = DatabaseManager(Constants.db_file_name)
     active_order_blocks = db_manager.get_active_order_blocks(symbol)
     db_manager.close_connection()
 
@@ -270,9 +274,6 @@ def handle_new_order_blocks(order_block: OrderBlock, pullback_zone_df: pandas.Da
     signal_detector = SignalDetector(order_block, pullback_zone_df, timeframe)
     is_to_send_signal = signal_detector.is_last_candle_reached_signal_price(chart)
 
-    # TODO: remove me!
-    is_to_send_signal = False
-
     if is_to_send_signal:
         # Freeze updating
         freeze_symbol_updating(order_block.symbol)
@@ -286,9 +287,18 @@ def handle_new_order_blocks(order_block: OrderBlock, pullback_zone_df: pandas.Da
         order_block.ninty_percent_fibo_price = signal_detector.get_price_by_fib_level(90)
 
         # Insert order block to DB
-        db_manager = DatabaseManager(DB_FILE_NAME)
+        db_manager = DatabaseManager(Constants.db_file_name)
         db_manager.insert_order_block(order_block, poll_id)
         db_manager.close_connection()
+
+    # if not order_block.is_tl_sl_message_sent:
+    #     if order_block.order_block_status == OrderBlockStatus.HIT_TL:
+    #         send_message(f"{order_block.symbol} hit Take-Profit!")
+    #         order_block.is_tl_sl_message_sent = True
+    #
+    #     elif order_block.order_block_status == OrderBlockStatus.HIT_SL:
+    #         send_message(f"{order_block.symbol} hit Stop-Loss :(")
+    #         order_block.is_tl_sl_message_sent = True
 
 
 def get_updated_chart(interval_disabled, symbol: str, df: pandas.DataFrame, candles_counter: int, start_date_to_run_live_candles, is_to_run, timeframe) -> go.Figure:
@@ -311,7 +321,7 @@ def get_updated_chart(interval_disabled, symbol: str, df: pandas.DataFrame, cand
     # Analyze
     results = get_all_order_blocks(df, symbol, chart, timeframe)
 
-    chart.update_layout(showlegend=False, xaxis_rangeslider_visible=False, height=chart_height_pixels, width=chart_width_pixels)
+    chart.update_layout(showlegend=False, xaxis_rangeslider_visible=False)
 
     # Check each order block
     for result in results:
@@ -331,6 +341,7 @@ def get_updated_chart(interval_disabled, symbol: str, df: pandas.DataFrame, cand
     # Handle existing order blocks
     handle_existing_order_blocks(symbol, chart, last_candle)
 
+    chart.update_layout(showlegend=False, xaxis_rangeslider_visible=False, height=chart_height_pixels, width=chart_width_pixels)
     return chart
 
 
@@ -347,7 +358,10 @@ def update_chart_by_context_index(context_index: int, interval_disabled: bool):
 
     pad_lock.acquire()
     updated_chart = get_updated_chart(interval_disabled, symbol, df, candles_counter, start_date_to_run_live_candles, is_to_run, timeframe)
-    chart_context[3] += 1
+
+    if is_to_run:
+        chart_context[3] += 1
+
     pad_lock.release()
 
     return updated_chart
@@ -387,6 +401,11 @@ def send_image(image_path: str, caption: str = None):
 
     with open(image_path, 'rb') as image_file:
         bot.send_photo(chat_id, image_file, caption)
+
+
+def send_message(text: str):
+    global chat_id
+    bot.send_message(chat_id, text)
 
 
 def send_signal(image_path: str, symbol: str):
@@ -440,8 +459,13 @@ def handle_poll_answer(pollAnswer):
         return
 
     # Get related order block
-    db_manager = DatabaseManager(DB_FILE_NAME)
-    related_order_block = db_manager.get_order_block_by_poll_id(poll_id)
+    db_manager = DatabaseManager(Constants.db_file_name)
+    related_order_blocks = db_manager.get_order_block_by_poll_id(poll_id)
+
+    if len(related_order_blocks) == 0:
+        return
+
+    related_order_block = related_order_blocks[0]
 
     # Get selected option
     selected_option_index = pollAnswer.option_ids[0]
@@ -456,7 +480,7 @@ def handle_poll_answer(pollAnswer):
         # TODO: take the trade - market - ccxt
 
         # Update order block in DB to be considered as traded
-        db_manager = DatabaseManager(DB_FILE_NAME)
+        db_manager = DatabaseManager(Constants.db_file_name)
         db_manager.update_status(related_order_block.id, OrderBlockStatus.TRADING)
         db_manager.close_connection()
 
@@ -475,6 +499,19 @@ def bot_polling():
 
 
 app.layout = html.Div([
+    html.Div([
+        html.Div([
+            html.H1("SMC Trading Bot - Control Panel", style={
+                'font-size': '36px',
+                'font-weight': 'bold',
+                'text-align': 'center',
+                'padding-top': '20px',
+                'color': '#333',
+                'font-family': 'Arial, sans-serif'
+            }),
+        ], style={'flex': '2', 'margin': '10px'}),
+    ], style={'display': 'flex', 'justify-content': 'center'}),
+
     html.Div([
         html.Div([
             html.Img(id='image1', style={'height': '50px', 'margin-right': '10px'}),
@@ -645,28 +682,27 @@ def update_chart(n, interval_disabled):
 
 
 if __name__ == "__main__":
-    # bot_thread = threading.Thread(target=bot_polling)
-    # bot_thread.start()
-    #
-    # # Ask user which coins to monitor
-    # coins_selection_poll_id = send_poll_multiple_answers("Please choose 4 coins to monitor", optional_coins).poll.id
-    # # Wait for response
-    # user_answer_poll_event.wait()
-    #
-    # user_answer_poll_event.clear()
-    #
-    # # Ask user which coins to monitor
-    # timeframe_selection_poll_id = send_poll("Please select time frame to monitor", optional_timeframes).poll.id
-    # # Wait for response
-    # user_answer_poll_event.wait()
+    bot_thread = threading.Thread(target=bot_polling)
+    bot_thread.start()
 
-    # TODO: remove
-    symbols.append('BTCUSDT')
-    symbols.append('ETHUSDT')
-    symbols.append('SOLUSDT')
-    symbols.append('MATICUSDT')
+    # Ask user which coins to monitor
+    coins_selection_poll_id = send_poll_multiple_answers("Please choose 4 coins to monitor", optional_coins).poll.id
+    # Wait for response
+    user_answer_poll_event.wait()
 
-    Constants.time_frame = '1d'
+    user_answer_poll_event.clear()
+
+    # Ask user which coins to monitor
+    timeframe_selection_poll_id = send_poll("Please select time frame to monitor", optional_timeframes).poll.id
+    # Wait for response
+    user_answer_poll_event.wait()
+
+    # Telegram bot replacement
+    # symbols.append('BTCUSDT')
+    # symbols.append('ETHUSDT')
+    # symbols.append('XRPUSDT')
+    # symbols.append('MANAUSDT')
+    # Constants.time_frame = '1d'
 
     for symbol in symbols:
         candles_counter = 0

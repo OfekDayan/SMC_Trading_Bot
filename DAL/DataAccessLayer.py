@@ -13,11 +13,8 @@ class DatabaseManager:
         self.connection = self.create_database()
 
     def create_database(self):
-        is_exist = os.path.exists(self.db_name)
         connection = sqlite3.connect(self.db_name)
-
-        if not is_exist:
-            self.create_tables(connection)
+        self.create_tables(connection)
 
         return connection
 
@@ -182,7 +179,20 @@ class DatabaseManager:
 
         cursor.execute(query)
         db_results = cursor.fetchall()
-        return self.convert_orderblocks_results_to_list(db_results)[0]
+        return self.convert_orderblocks_results_to_list(db_results)
+
+    def get_user_decision(self, order_block_id):
+        cursor = self.connection.cursor()
+
+        query = f'''
+                    SELECT userDecision 
+                    FROM OrderBlock
+                    WHERE id = {order_block_id}
+                '''
+
+        cursor.execute(query)
+        db_results = cursor.fetchall()
+        return db_results
 
     def update_status(self, order_block_id, status: OrderBlockStatus):
         cursor = self.connection.cursor()
@@ -201,27 +211,3 @@ class DatabaseManager:
 
     def close_connection(self):
         self.connection.close()
-
-
-# if __name__ == "__main__":
-#     db_manager = DatabaseManager("my_database.db")
-#
-#     # Create OrderBlock instance and insert into database
-#     date_string = "8.8.2023 12:42:01.956"
-#     format_string = "%d.%m.%Y %H:%M:%S.%f"
-#     dt_object = datetime.strptime(date_string, format_string)
-#
-#     bottom_left = Point(dt_object, 5)
-#     top_right = Point(dt_object, 7)
-#     order_block = OrderBlock(bottom_left, top_right, True)
-#
-#     db_manager.insert_order_block(order_block)
-#
-#     # Retrieve order blocks from the database
-#     order_blocks = db_manager.get_all_order_blocks()
-#     valid_order_blocks = db_manager.get_all_valid_order_blocks()
-#     user_option = UserOption.NONE
-#     user_decision_order_blocks = db_manager.get_all_order_blocks_by_user_decision(user_option)
-#
-#     # Close the database connection when done
-#     db_manager.close_connection()
