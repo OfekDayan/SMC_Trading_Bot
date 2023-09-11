@@ -1,5 +1,6 @@
 import datetime
 import os.path
+import random
 import threading
 import ccxt
 import dash
@@ -43,9 +44,19 @@ chat_id = 1451941685
 BOT_ID = '5341091307:AAHGuAJDKLl3zzjIpfGhaVpW3Y3UgBNAXG4'
 bot = telebot.TeleBot(BOT_ID)
 
+records_lock = threading.Lock()
+record_files = [
+    'dataframes\BTCUSDT_1d_20230911230832.txt',
+    'dataframes\MATICUSDT_1d_20230911221453.txt',
+    'dataframes\LTCUSDT_1d_20230911022725.txt',
+    'dataframes\AAVEUSDT_1d_20230911223200.txt'
+]
+
+taken_records_files_index = []
+
 # Dash app
-INTERVAL = 3000
-NUMBER_OF_CANDLES = 450
+INTERVAL = 1500
+NUMBER_OF_CANDLES = 400
 app = dash.Dash(__name__)
 chart_width_pixels = 2000
 chart_height_pixels = 1200
@@ -54,6 +65,8 @@ start_date_to_run_live_candles = datetime.datetime(2023, 9, 12)
 
 PIVOT_POINTS_SIMULATOR = False
 is_to_update_symbols = True
+
+is_online_mode = False
 
 
 def get_coin_image_path(symbol: str):
@@ -75,8 +88,8 @@ def slice_list_by_timestamp_range(main_list, start_timestamp, end_timestamp):
 
 def write_df(symbol: str, candlestick_data):
     # Slice the DataFrame using loc
-    start_date = int(pd.Timestamp(datetime.datetime(2022, 6, 19, 0, 0, 0)).timestamp())
-    end_date = int(pd.Timestamp(datetime.datetime(2023, 2, 19, 0, 0, 0)).timestamp())
+    start_date = int(pd.Timestamp(datetime.datetime(2021, 11, 1, 0, 0, 0)).timestamp())
+    end_date = int(pd.Timestamp(datetime.datetime(2022, 5, 5, 0, 0, 0)).timestamp())
     candlestick_data_to_write = slice_list_by_timestamp_range(candlestick_data, start_date, end_date)
 
     # candlestick_data_to_write = candlestick_data
@@ -85,7 +98,7 @@ def write_df(symbol: str, candlestick_data):
 
     with open(file_name, 'w') as file:
         file.write(Constants.time_frame + '\n')  # timeframe
-        file.write('2023-07-6 00:00:00\n')      # start live running
+        file.write('2022-02-01 00:00:00\n')      # start live running
 
         # Date
         for item in candlestick_data_to_write:
@@ -116,20 +129,40 @@ def read_df(path):
 
 
 def get_candlestick_data_frame(symbol: str) -> pandas.DataFrame:
-    timeframe = Constants.time_frame
-    start_live_running = start_date_to_run_live_candles
+    if is_online_mode:
+        timeframe = Constants.time_frame
+        start_live_running = start_date_to_run_live_candles
 
-    # Get the data frame from API
-    exchange = ccxt.binance()
-    exchange.options = {'defaultType': 'future', 'adjustForTimeDifference': True}
-    candlestick_data = exchange.fetch_ohlcv(symbol, Constants.time_frame, limit=NUMBER_OF_CANDLES)
+        # Get the data frame from API
+        exchange = ccxt.binance()
+        exchange.options = {'defaultType': 'future', 'adjustForTimeDifference': True}
 
-    df = pd.DataFrame(candlestick_data, columns=['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
-    df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='ms')
-    df.set_index('Timestamp', inplace=True)
+        # since = int(datetime.datetime(2021, 6, 1, 0, 0, 0).timestamp() * 1000)
+        # candlestick_data = exchange.fetch_ohlcv(symbol, Constants.time_frame, since=x, limit=NUMBER_OF_CANDLES)
+        candlestick_data = exchange.fetch_ohlcv(symbol, Constants.time_frame, limit=NUMBER_OF_CANDLES)
 
-    if symbol == "MATICUSDT":
-        pass
+        df = pd.DataFrame(candlestick_data, columns=['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
+        df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='ms')
+        df.set_index('Timestamp', inplace=True)
+
+    else:
+        r = random.Random()
+
+        records_lock.acquire()
+        random_index = r.randint(0, len(record_files) - 1)
+
+        while random_index in taken_records_files_index:
+            random_index = r.randint(0, len(record_files) - 1)
+
+        taken_records_files_index.append(random_index)
+        file_name_to_load = record_files[random_index]
+
+        records_lock.release()
+
+        return read_df(file_name_to_load)
+
+    # if symbol == "BTCUSDT":
+        # pass
         # write_df(symbol, candlestick_data)
         # return read_df("dataframes\LTCUSDT_20230911022725.txt")
 
@@ -236,6 +269,9 @@ def handle_new_order_blocks(order_block: OrderBlock, pullback_zone_df: pandas.Da
     # Signals finder
     signal_detector = SignalDetector(order_block, pullback_zone_df, timeframe)
     is_to_send_signal = signal_detector.is_last_candle_reached_signal_price(chart)
+
+    # TODO: remove me!
+    is_to_send_signal = False
 
     if is_to_send_signal:
         # Freeze updating
@@ -625,10 +661,10 @@ if __name__ == "__main__":
     # user_answer_poll_event.wait()
 
     # TODO: remove
-    symbols.append('AAVEUSDT')
-    symbols.append('PERPUSDT')
-    symbols.append('LINKUSDT')
-    symbols.append('APEUSDT')
+    symbols.append('BTCUSDT')
+    symbols.append('ETHUSDT')
+    symbols.append('SOLUSDT')
+    symbols.append('MATICUSDT')
 
     Constants.time_frame = '1d'
 
