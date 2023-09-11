@@ -45,12 +45,12 @@ bot = telebot.TeleBot(BOT_ID)
 
 # Dash app
 INTERVAL = 3000
-NUMBER_OF_CANDLES = 400
+NUMBER_OF_CANDLES = 450
 app = dash.Dash(__name__)
-chart_width_pixels = 800
+chart_width_pixels = 2000
 chart_height_pixels = 1200
 
-start_date_to_run_live_candles = datetime.datetime(2023, 9, 5)
+start_date_to_run_live_candles = datetime.datetime(2023, 9, 12)
 
 PIVOT_POINTS_SIMULATOR = False
 is_to_update_symbols = True
@@ -75,15 +75,17 @@ def slice_list_by_timestamp_range(main_list, start_timestamp, end_timestamp):
 
 def write_df(symbol: str, candlestick_data):
     # Slice the DataFrame using loc
-    start_date = int(pd.Timestamp(datetime.datetime(2022, 11, 8, 0, 0, 0)).timestamp())
-    end_date = int(pd.Timestamp(datetime.datetime(2023, 5, 15, 0, 0, 0)).timestamp())
+    start_date = int(pd.Timestamp(datetime.datetime(2022, 6, 19, 0, 0, 0)).timestamp())
+    end_date = int(pd.Timestamp(datetime.datetime(2023, 2, 19, 0, 0, 0)).timestamp())
     candlestick_data_to_write = slice_list_by_timestamp_range(candlestick_data, start_date, end_date)
 
-    file_name = f"dataframes\\{symbol}_" + datetime.datetime.now().strftime("%Y%m%d%H%M%S") + ".txt"
+    # candlestick_data_to_write = candlestick_data
+
+    file_name = f"dataframes\\{symbol}_{Constants.time_frame}_" + datetime.datetime.now().strftime("%Y%m%d%H%M%S") + ".txt"
 
     with open(file_name, 'w') as file:
         file.write(Constants.time_frame + '\n')  # timeframe
-        file.write('2023-03-13 00:00:00\n')      # start live running
+        file.write('2023-07-6 00:00:00\n')      # start live running
 
         # Date
         for item in candlestick_data_to_write:
@@ -113,7 +115,6 @@ def read_df(path):
     return df, timeframe, start_live_running
 
 
-
 def get_candlestick_data_frame(symbol: str) -> pandas.DataFrame:
     timeframe = Constants.time_frame
     start_live_running = start_date_to_run_live_candles
@@ -127,7 +128,7 @@ def get_candlestick_data_frame(symbol: str) -> pandas.DataFrame:
     df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='ms')
     df.set_index('Timestamp', inplace=True)
 
-    if symbol == "LTCUSDT":
+    if symbol == "MATICUSDT":
         pass
         # write_df(symbol, candlestick_data)
         # return read_df("dataframes\LTCUSDT_20230911022725.txt")
@@ -608,20 +609,28 @@ def update_chart(n, interval_disabled):
 
 
 if __name__ == "__main__":
-    bot_thread = threading.Thread(target=bot_polling)
-    bot_thread.start()
+    # bot_thread = threading.Thread(target=bot_polling)
+    # bot_thread.start()
+    #
+    # # Ask user which coins to monitor
+    # coins_selection_poll_id = send_poll_multiple_answers("Please choose 4 coins to monitor", optional_coins).poll.id
+    # # Wait for response
+    # user_answer_poll_event.wait()
+    #
+    # user_answer_poll_event.clear()
+    #
+    # # Ask user which coins to monitor
+    # timeframe_selection_poll_id = send_poll("Please select time frame to monitor", optional_timeframes).poll.id
+    # # Wait for response
+    # user_answer_poll_event.wait()
 
-    # Ask user which coins to monitor
-    coins_selection_poll_id = send_poll_multiple_answers("Please choose 4 coins to monitor", optional_coins).poll.id
-    # Wait for response
-    user_answer_poll_event.wait()
+    # TODO: remove
+    symbols.append('AAVEUSDT')
+    symbols.append('PERPUSDT')
+    symbols.append('LINKUSDT')
+    symbols.append('APEUSDT')
 
-    user_answer_poll_event.clear()
-
-    # Ask user which coins to monitor
-    timeframe_selection_poll_id = send_poll("Please select time frame to monitor", optional_timeframes).poll.id
-    # Wait for response
-    user_answer_poll_event.wait()
+    Constants.time_frame = '1d'
 
     for symbol in symbols:
         candles_counter = 0
