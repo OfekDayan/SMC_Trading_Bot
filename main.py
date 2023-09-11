@@ -53,7 +53,7 @@ record_files = [os.path.join(root, filename) for root, _, files in os.walk('data
 taken_records_files_index = []
 
 # Dash app
-INTERVAL = 2500
+INTERVAL = 2800
 NUMBER_OF_CANDLES = 400
 app = dash.Dash(__name__)
 chart_width_pixels = 2800
